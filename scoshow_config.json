@@ -1,0 +1,29 @@
+{
+  "round_position": "1286,917",
+  "round_font_size": "100",
+  "rank_positions": {
+    "1st": "2930,140",
+    "2nd": "2930,230",
+    "3rd": "2930,320",
+    "4th": "2930,410",
+    "5th": "2930,500",
+    "6th": "2930,590",
+    "7th": "2930,680",
+    "8th": "2930,770",
+    "9th": "2930,860",
+    "10th": "2930,950"
+  },
+  "final_positions": {
+    "winner": "1920,300",
+    "second": "1920,450",
+    "third": "1920,600",
+    "fourth": "1920,750",
+    "fifth": "1920,900"
+  },
+  "font_name": "trebuc.ttf",
+  "font_color": "yellow",
+  "rank_font_size": "60",
+  "final_font_size": "100",
+  "background_folder": "D:/Python/Projects/ScoShow/background",
+  "selected_monitor": 0
+}
