@@ -17,17 +17,7 @@ class TournamentDisplayWindow:
     
     def __init__(self, monitor_index=1):
         self.root = tk.Toplevel()
-                   ttk.Button(display_buttons, text="🚀 Open Display", 
-                  style='Success.TButton',
-                  command=self.open_display).pack(side=tk.LEFT, padx=(0, 8))
-        ttk.Button(display_buttons, text="🔴 Close Display", 
-                  style='Warning.TButton',
-                  command=self.close_display).pack(side=tk.LEFT)tton(display_buttons, text="🚀 Open Display", 
-                  style='Success.TButton',
-                  command=self.open_display).pack(side=tk.LEFT, padx=(0, 8))
-        ttk.Button(display_buttons, text="🔴 Close Display", 
-                  style='Warning.TButton',
-                  command=self.close_display).pack(side=tk.LEFT)ot.title("ScoShow - Tournament Display")
+        self.root.title("ScoShow - Tournament Display")
         self.root.configure(bg='black')
         
         # Thiết lập fullscreen trên màn hình mở rộng
@@ -821,6 +811,14 @@ class TournamentControlPanel:
             print("Display window closed")
         else:
             messagebox.showinfo("Thông báo", "Không có display nào đang mở")
+    
+    def switch_monitor(self):
+        """Chuyển đổi display sang màn hình khác"""
+        if self.display_window:
+            # Reopen display on selected monitor
+            self.open_display()
+        else:
+            messagebox.showwarning("Cảnh báo", "Không có display nào đang mở")
     
     def show_background(self, bg_id):
         """Hiển thị background được chọn"""

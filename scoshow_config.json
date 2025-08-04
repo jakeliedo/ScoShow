@@ -14,16 +14,16 @@
     "10th": "2930,950"
   },
   "final_positions": {
-    "winner": "1920,300",
+    "winner": "2750,200",
     "second": "1920,450",
     "third": "1920,600",
     "fourth": "1920,750",
     "fifth": "1920,900"
   },
-  "font_name": "trebuc.ttf",
-  "font_color": "yellow",
+  "font_name": "calibri.ttf",
+  "font_color": "orange",
   "rank_font_size": "60",
   "final_font_size": "100",
   "background_folder": "D:/Python/Projects/ScoShow/background",
-  "selected_monitor": 0
+  "selected_monitor": 1
 }
