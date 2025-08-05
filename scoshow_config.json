@@ -1,4 +1,6 @@
 {
+  "background_folder": "B:/Python/Projects/ScoShow/background",
+  "selected_monitor": 2,
   "round_position": "1286,917",
   "round_font_size": "100",
   "rank_positions": {
@@ -20,10 +22,8 @@
     "fourth": "3150,700",
     "fifth": "3150,900"
   },
-  "font_name": "calibri.ttf",
-  "font_color": "yellow",
+  "font_name": "arial.ttf",
+  "font_color": "white",
   "rank_font_size": "60",
-  "final_font_size": "100",
-  "background_folder": "B:/Python/Projects/ScoShow/background",
-  "selected_monitor": 1
+  "final_font_size": "100"
 }
