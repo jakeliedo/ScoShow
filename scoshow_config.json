@@ -14,16 +14,16 @@
     "10th": "2930,950"
   },
   "final_positions": {
-    "winner": "2750,200",
-    "second": "1920,450",
-    "third": "1920,600",
-    "fourth": "1920,750",
-    "fifth": "1920,900"
+    "winner": "3150,100",
+    "second": "3150,300",
+    "third": "3150,500",
+    "fourth": "3150,700",
+    "fifth": "3150,900"
   },
   "font_name": "calibri.ttf",
-  "font_color": "orange",
+  "font_color": "yellow",
   "rank_font_size": "60",
   "final_font_size": "100",
-  "background_folder": "D:/Python/Projects/ScoShow/background",
+  "background_folder": "B:/Python/Projects/ScoShow/background",
   "selected_monitor": 1
 }

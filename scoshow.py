@@ -17,15 +17,27 @@ class TournamentDisplayWindow:
     
     def __init__(self, monitor_index=1):
         self.root = tk.Toplevel()
-        self.root.title("ScoShow - Tournament Display")
+        self.root.title("ScoShow - Tournament Display (F11: Toggle Fullscreen, ESC: Exit Fullscreen)")
         self.root.configure(bg='black')
         
-        # Thiết lập fullscreen trên màn hình mở rộng
-        self.setup_monitor(monitor_index)
+        # Trạng thái fullscreen
+        self.is_fullscreen = False
+        
+        # Thiết lập cửa sổ ban đầu ở chế độ có thể kéo thả
+        self.setup_window_mode(monitor_index)
+        
+        # Thiết lập các phím tắt
+        self.setup_keyboard_shortcuts()
+        
+        # Thiết lập sự kiện theo dõi di chuyển cửa sổ
+        self.setup_window_tracking()
         
         # Label để hiển thị ảnh
         self.image_label = tk.Label(self.root, bg='black')
         self.image_label.pack(expand=True)
+        
+        # Hiển thị hướng dẫn sử dụng
+        self.show_instructions()
         
         # Ảnh nền hiện tại
         self.current_background = None
@@ -35,19 +47,228 @@ class TournamentDisplayWindow:
         self.font_size = 60
         self.font_color = "white"
         
-    def setup_monitor(self, monitor_index):
-        """Thiết lập cửa sổ trên màn hình được chỉ định"""
+    def setup_window_mode(self, monitor_index):
+        """Thiết lập cửa sổ ở chế độ có thể kéo thả"""
         monitors = get_monitors()
         
         if monitor_index < len(monitors):
             monitor = monitors[monitor_index]
-            self.root.geometry(f"{monitor.width}x{monitor.height}+{monitor.x}+{monitor.y}")
+            # Tạo cửa sổ với kích thước 80% màn hình, có thể kéo thả
+            width = int(monitor.width * 0.8)
+            height = int(monitor.height * 0.8)
+            x = monitor.x + (monitor.width - width) // 2
+            y = monitor.y + (monitor.height - height) // 2
+            self.root.geometry(f"{width}x{height}+{x}+{y}")
         else:
-            # Nếu không có màn hình mở rộng, sử dụng màn hình chính
-            self.root.geometry("470x700+100+100")
+            # Nếu không có màn hình mở rộng, sử dụng kích thước mặc định
+            self.root.geometry("800x600+100+100")
             
-        self.root.attributes('-fullscreen', True)
-        self.root.bind('<Escape>', lambda e: self.root.attributes('-fullscreen', False))
+        # Cho phép resize cửa sổ
+        self.root.resizable(True, True)
+        
+    def setup_keyboard_shortcuts(self):
+        """Thiết lập các phím tắt"""
+        # F11: Toggle fullscreen
+        self.root.bind('<F11>', self.toggle_fullscreen)
+        # ESC: Thoát fullscreen
+        self.root.bind('<Escape>', self.exit_fullscreen)
+        # Ctrl+D: Hiển thị thông tin debug
+        self.root.bind('<Control-d>', self.show_debug_info)
+        
+        # Focus để nhận phím tắt
+        self.root.focus_set()
+        
+    def setup_window_tracking(self):
+        """Thiết lập theo dõi di chuyển cửa sổ"""
+        # Theo dõi sự kiện di chuyển và thay đổi kích thước cửa sổ
+        self.root.bind('<Configure>', self.on_window_configure)
+        
+        # Biến để theo dõi vị trí trước đó
+        self.last_x = 0
+        self.last_y = 0
+        
+    def on_window_configure(self, event):
+        """Xử lý sự kiện khi cửa sổ thay đổi vị trí hoặc kích thước"""
+        # Chỉ xử lý sự kiện từ cửa sổ chính (không phải từ các widget con)
+        if event.widget == self.root:
+            current_x = self.root.winfo_x()
+            current_y = self.root.winfo_y()
+            
+            # Chỉ cập nhật nếu vị trí thực sự thay đổi
+            if current_x != self.last_x or current_y != self.last_y:
+                self.last_x = current_x
+                self.last_y = current_y
+                
+                # Cập nhật thông tin màn hình hiện tại (chỉ khi không ở chế độ fullscreen)
+                if not self.is_fullscreen:
+                    self.update_current_monitor_info()
+                    
+    def update_current_monitor_info(self):
+        """Cập nhật thông tin màn hình hiện tại dựa trên vị trí cửa sổ"""
+        monitors = get_monitors()
+        current_x = self.root.winfo_x()
+        current_y = self.root.winfo_y()
+        
+        # Tìm màn hình hiện tại
+        new_monitor_index = -1
+        for i, monitor in enumerate(monitors):
+            if (monitor.x <= current_x < monitor.x + monitor.width and
+                monitor.y <= current_y < monitor.y + monitor.height):
+                new_monitor_index = i
+                break
+                
+        # Cập nhật nếu màn hình thay đổi
+        if hasattr(self, 'current_monitor_index') and new_monitor_index != self.current_monitor_index:
+            self.current_monitor_index = new_monitor_index
+            if new_monitor_index >= 0:
+                print(f"Cửa sổ đã di chuyển đến màn hình {new_monitor_index + 1}")
+            else:
+                print("Cửa sổ không nằm hoàn toàn trên màn hình nào")
+        elif not hasattr(self, 'current_monitor_index'):
+            self.current_monitor_index = new_monitor_index
+        
+    def toggle_fullscreen(self, event=None):
+        """Chuyển đổi giữa fullscreen và windowed mode"""
+        if not self.is_fullscreen:
+            # Chuyển sang fullscreen - lưu vị trí hiện tại
+            self.store_current_position()
+            self.enter_fullscreen()
+        else:
+            # Thoát fullscreen - khôi phục vị trí
+            self.exit_fullscreen()
+            
+    def store_current_position(self):
+        """Lưu vị trí và kích thước hiện tại của cửa sổ"""
+        self.stored_geometry = self.root.geometry()
+        self.stored_x = self.root.winfo_x()
+        self.stored_y = self.root.winfo_y()
+        self.stored_width = self.root.winfo_width()
+        self.stored_height = self.root.winfo_height()
+        
+        # Xác định màn hình hiện tại
+        monitors = get_monitors()
+        self.current_monitor_index = -1
+        for i, monitor in enumerate(monitors):
+            if (monitor.x <= self.stored_x < monitor.x + monitor.width and
+                monitor.y <= self.stored_y < monitor.y + monitor.height):
+                self.current_monitor_index = i
+                break
+                
+        print(f"Lưu vị trí: {self.stored_geometry}, màn hình: {self.current_monitor_index + 1 if self.current_monitor_index >= 0 else 'không xác định'}")
+        
+    def enter_fullscreen(self):
+        """Vào chế độ fullscreen trên màn hình hiện tại"""
+        self.is_fullscreen = True
+        
+        # Nếu xác định được màn hình hiện tại, đặt fullscreen trên màn hình đó
+        if hasattr(self, 'current_monitor_index') and self.current_monitor_index >= 0:
+            monitors = get_monitors()
+            if self.current_monitor_index < len(monitors):
+                monitor = monitors[self.current_monitor_index]
+                
+                # Tắt fullscreen tạm thời để thay đổi vị trí
+                self.root.attributes('-fullscreen', False)
+                self.root.update()
+                
+                # Đặt cửa sổ vào đúng màn hình trước khi fullscreen
+                self.root.geometry(f"{monitor.width}x{monitor.height}+{monitor.x}+{monitor.y}")
+                self.root.update()
+                
+                # Chờ một chút để đảm bảo vị trí được cập nhật
+                self.root.after(100, lambda: self.root.attributes('-fullscreen', True))
+                
+                print(f"Fullscreen trên màn hình {self.current_monitor_index + 1}: {monitor.width}x{monitor.height} at ({monitor.x},{monitor.y})")
+            else:
+                # Fallback nếu không có thông tin màn hình
+                self.root.attributes('-fullscreen', True)
+        else:
+            # Fallback nếu không xác định được màn hình
+            self.root.attributes('-fullscreen', True)
+            
+        self.hide_instructions()
+        print("Chuyển sang chế độ fullscreen")
+            
+    def exit_fullscreen(self, event=None):
+        """Thoát khỏi chế độ fullscreen và khôi phục vị trí"""
+        if self.is_fullscreen:
+            self.is_fullscreen = False
+            self.root.attributes('-fullscreen', False)
+            
+            # Khôi phục vị trí và kích thước đã lưu
+            if hasattr(self, 'stored_geometry'):
+                self.root.after(100, lambda: self.root.geometry(self.stored_geometry))
+                print(f"Khôi phục vị trí: {self.stored_geometry}")
+            else:
+                # Fallback nếu không có vị trí đã lưu
+                self.root.geometry("800x600+100+100")
+                
+            self.root.after(200, self.show_instructions)
+            print("Thoát chế độ fullscreen")
+            
+    def show_instructions(self):
+        """Hiển thị hướng dẫn sử dụng"""
+        if not hasattr(self, 'instruction_label'):
+            self.instruction_label = tk.Label(
+                self.root,
+                text="🎯 HƯỚNG DẪN SỬ DỤNG:\n"
+                     "• Kéo thả cửa sổ này đến màn hình mong muốn\n"
+                     "• Nhấn F11 để bật/tắt fullscreen (giữ nguyên màn hình hiện tại)\n"
+                     "• Nhấn ESC để thoát fullscreen\n"
+                     "• Nhấn Ctrl+D để xem thông tin debug\n"
+                     "• Fullscreen sẽ duy trì màn hình bạn đã chọn",
+                font=('Arial', 11, 'bold'),
+                bg='black',
+                fg='yellow',
+                justify='left'
+            )
+        self.instruction_label.place(x=10, y=10)
+        
+        # Tự động ẩn sau 5 giây
+        self.root.after(5000, self.hide_instructions)
+        
+    def hide_instructions(self):
+        """Ẩn hướng dẫn sử dụng"""
+        if hasattr(self, 'instruction_label'):
+            self.instruction_label.place_forget()
+            
+    def show_debug_info(self, event=None):
+        """Hiển thị thông tin debug"""
+        monitors = get_monitors()
+        current_x = self.root.winfo_x()
+        current_y = self.root.winfo_y()
+        current_width = self.root.winfo_width()
+        current_height = self.root.winfo_height()
+        
+        # Sử dụng thông tin màn hình đã theo dõi
+        current_monitor = getattr(self, 'current_monitor_index', -1)
+                
+        debug_text = (
+            f"🖥️ THÔNG TIN DEBUG:\n"
+            f"Vị trí cửa sổ: ({current_x}, {current_y})\n"
+            f"Kích thước: {current_width}x{current_height}\n"
+            f"Fullscreen: {'Có' if self.is_fullscreen else 'Không'}\n"
+            f"Màn hình hiện tại: {current_monitor + 1 if current_monitor >= 0 else 'Không xác định'}\n"
+            f"Tổng số màn hình: {len(monitors)}\n"
+            f"Vị trí đã lưu: {getattr(self, 'stored_geometry', 'Chưa có')}"
+        )
+        
+        if hasattr(self, 'debug_label'):
+            self.debug_label.destroy()
+            
+        self.debug_label = tk.Label(
+            self.root,
+            text=debug_text,
+            font=('Arial', 10, 'bold'),
+            bg='blue',
+            fg='white',
+            justify='left'
+        )
+        self.debug_label.place(x=10, y=150)
+        
+        # Tự động ẩn sau 3 giây
+        self.root.after(3000, lambda: self.debug_label.destroy() if hasattr(self, 'debug_label') else None)
+        
+        print(debug_text.replace('🖥️ ', '').replace('\n', ', '))
         
     def load_background_folder(self, folder_path):
         """Tải thư mục chứa ảnh nền"""
@@ -209,7 +430,7 @@ class TournamentControlPanel:
         self.root.resizable(True, True)
         
         # Đặt kích thước tối thiểu
-        self.root.minsize(705, 886)
+        self.root.minsize(960, 886)
         
         # Tournament display window
         self.display_window = None
@@ -549,11 +770,14 @@ class TournamentControlPanel:
         
         ttk.Button(display_buttons, text="🚀 Open Display", 
                   style='Success.TButton',
-                  command=self.open_display).pack(side=tk.LEFT, padx=(0, 8))
-        ttk.Button(display_buttons, text="� Switch Monitor", 
+                  command=self.open_display).pack(side=tk.LEFT, padx=(0, 6))
+        ttk.Button(display_buttons, text="🖥️ Toggle Fullscreen", 
                   style='Action.TButton',
-                  command=self.switch_monitor).pack(side=tk.LEFT, padx=(0, 8))
-        ttk.Button(display_buttons, text="�🔴 Close Display", 
+                  command=self.toggle_display_fullscreen).pack(side=tk.LEFT, padx=(0, 6))
+        ttk.Button(display_buttons, text="🔄 Switch Monitor", 
+                  style='Action.TButton',
+                  command=self.switch_monitor).pack(side=tk.LEFT, padx=(0, 6))
+        ttk.Button(display_buttons, text="🔴 Close Display", 
                   style='Warning.TButton',
                   command=self.close_display).pack(side=tk.LEFT)
                   
@@ -733,11 +957,12 @@ class TournamentControlPanel:
                 font=('Arial', 9, 'bold'),
                 bg='#E8F6F3', fg='#27AE60').pack(pady=(5, 3))
         
-        self.status_label = tk.Label(status_container, text="Ready to start tournament display", 
+        self.status_label = tk.Label(status_container, text="Ready to start tournament display\n💡 Tip: You can drag the display window to any monitor and press F11 for fullscreen", 
                                    font=('Arial', 8),
                                    bg='#E8F6F3', fg='#2C3E50',
                                    relief=tk.FLAT,
-                                   padx=8, pady=5)
+                                   padx=8, pady=5,
+                                   justify='left')
         self.status_label.pack(pady=(0, 5))
         
     def select_background_folder(self):
@@ -817,6 +1042,16 @@ class TournamentControlPanel:
         if self.display_window:
             # Reopen display on selected monitor
             self.open_display()
+        else:
+            messagebox.showwarning("Cảnh báo", "Không có display nào đang mở")
+    
+    def toggle_display_fullscreen(self):
+        """Chuyển đổi chế độ fullscreen của display window"""
+        if self.display_window:
+            self.display_window.toggle_fullscreen()
+            current_state = "fullscreen" if self.display_window.is_fullscreen else "windowed"
+            self.status_label.config(text=f"Display switched to {current_state} mode")
+            print(f"Display toggled to {current_state} mode")
         else:
             messagebox.showwarning("Cảnh báo", "Không có display nào đang mở")
     
