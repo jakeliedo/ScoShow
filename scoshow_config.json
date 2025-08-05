@@ -1,29 +1,29 @@
 {
   "background_folder": "B:/Python/Projects/ScoShow/background",
-  "selected_monitor": 1,
-  "round_position": "1286,917",
+  "selected_monitor": 2,
+  "round_position": "1286,935",
   "round_font_size": "60",
   "rank_positions": {
-    "1st": "1000,400",
-    "2nd": "1000,500",
-    "3rd": "1000,600",
-    "4th": "1000,700",
-    "5th": "1000,800",
-    "6th": "1000,900",
-    "7th": "1000,1000",
-    "8th": "2000,400",
-    "9th": "2000,500",
-    "10th": "2000,600"
+    "1st": "2960,125",
+    "2nd": "2960,220",
+    "3rd": "2960,318",
+    "4th": "2960,402",
+    "5th": "2960,495",
+    "6th": "2960,578",
+    "7th": "2960,672",
+    "8th": "2960,762",
+    "9th": "2960,850",
+    "10th": "2960,939"
   },
   "final_positions": {
-    "winner": "1920,320",
-    "second": "1920,450",
-    "third": "1920,600",
-    "fourth": "1920,750",
-    "fifth": "1920,900"
+    "winner": "3000,80",
+    "second": "3000,280",
+    "third": "3000,480",
+    "fourth": "3000,680",
+    "fifth": "3000,880"
   },
   "font_name": "arial.ttf",
   "font_color": "white",
-  "rank_font_size": "100",
+  "rank_font_size": "80",
   "final_font_size": "120"
 }

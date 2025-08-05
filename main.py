@@ -431,10 +431,10 @@ class TournamentControlPanel(QMainWindow):
         self.round_position = "1286,917"
         self.round_font_size = "60"
         self.rank_positions = {
-            '1st': "1000,400", '2nd': "1000,500", '3rd': "1000,600", 
-            '4th': "1000,700", '5th': "1000,800", '6th': "1000,900", 
-            '7th': "1000,1000", '8th': "2000,400", '9th': "2000,500", 
-            '10th': "2000,600"
+            '1st': "2980,125", '2nd': "2980,220", '3rd': "2980,318", 
+            '4th': "2980,402", '5th': "2980,495", '6th': "2980,578", 
+            '7th': "2980,672", '8th': "2980,762", '9th': "2980,850", 
+            '10th': "2980,939"
         }
         
         # Font settings
@@ -447,8 +447,8 @@ class TournamentControlPanel(QMainWindow):
             'winner': '', 'second': '', 'third': '', 'fourth': '', 'fifth': ''
         }
         self.final_positions = {
-            'winner': "1920,300", 'second': "1920,450", 'third': "1920,600",
-            'fourth': "1920,750", 'fifth': "1920,900"
+            'winner': "3000,80", 'second': "3000,280", 'third': "3000,480", 
+            'fourth': "3000,680", 'fifth': "3000,880"
         }
         self.final_font_size = "60"
         
@@ -848,6 +848,7 @@ class TournamentControlPanel(QMainWindow):
                     border: 2px solid #3498DB;
                 }
             """)
+            self.rank_edits[rank].setAlignment(Qt.AlignCenter)
             ranking_layout.addWidget(self.rank_edits[rank], row, col + 1)
             
             self.rank_pos_edits[rank] = QLineEdit(self.rank_positions[rank])
@@ -866,6 +867,7 @@ class TournamentControlPanel(QMainWindow):
                     border: 2px solid #3498DB;
                 }
             """)
+            self.rank_pos_edits[rank].setAlignment(Qt.AlignCenter)
             ranking_layout.addWidget(self.rank_pos_edits[rank], row, col + 2)
             
         group_layout.addWidget(ranking_frame)
