@@ -1,0 +1,8 @@
+# ScoShow Client - Quick Start 
+ 
+1. Simply run ScoShow_Client.exe 
+2. Keep this running on your display computer 
+3. The client will connect to MQTT broker automatically 
+4. Wait for remote control commands 
+ 
+Note: Make sure background folder is in same directory as EXE! 

@@ -6,6 +6,7 @@ This runs on the remote computer for controlling the client display
 import sys
 import json
 import time
+import os
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                              QHBoxLayout, QLabel, QPushButton, QLineEdit, 
                              QComboBox, QGroupBox, QGridLayout, QFrame,
@@ -13,6 +14,13 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                              QSpinBox, QCheckBox)
 from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QObject
 from PyQt5.QtGui import QFont, QColor
+
+try:
+    from screeninfo import get_monitors
+except ImportError:
+    print("Warning: screeninfo not installed. Using default monitor names.")
+    def get_monitors():
+        return [type('Monitor', (), {'name': f'Monitor {i}', 'width': 1920, 'height': 1080})() for i in range(1, 5)]
 import paho.mqtt.client as mqtt
 from mqtt_config import *
 
@@ -119,12 +127,17 @@ class ScoShowRemoteControl(QMainWindow):
         self.mqtt_handler = None
         self.client_status = "Disconnected"
         self.last_heartbeat = None
+        self.current_background = "00"  # Track current background
+        self.config_file = "remote_config.json"  # Config file for settings
         
         # Setup window
         self.setup_window()
         
         # Setup variables
         self.setup_variables()
+        
+        # Load saved settings
+        self.load_settings()
         
         # Setup UI
         self.setup_ui()
@@ -149,12 +162,153 @@ class ScoShowRemoteControl(QMainWindow):
             '7th': "2980,672", '8th': "2980,762", '9th': "2980,850", 
             '10th': "2980,939"
         }
-        
+        self.default_rank_font_size = 80  # Font size for ranking
+
         # Default positions for final results
         self.default_final_positions = {
             'winner': "3000,80", 'second': "3000,280", 'third': "3000,480", 
             'fourth': "3000,680", 'fifth': "3000,880"
         }
+        self.default_final_font_size = 120  # Font size for final results
+
+        # Default position for Round
+        self.default_round_position = "1286,935"
+        
+        # Available monitors list
+        self.available_monitors = []
+        self.detect_monitors()
+        
+    def detect_monitors(self):
+        """Detect available monitors"""
+        try:
+            from screeninfo import get_monitors
+            monitors = get_monitors()
+            self.available_monitors = []
+            for i, monitor in enumerate(monitors):
+                monitor_name = f"Monitor {i+1} ({monitor.width}x{monitor.height})"
+                self.available_monitors.append(monitor_name)
+        except:
+            self.available_monitors = ["Monitor 1 (Primary)"]
+            
+    def load_settings(self):
+        """Load saved settings from config file"""
+        try:
+            if os.path.exists(self.config_file):
+                with open(self.config_file, 'r', encoding='utf-8') as f:
+                    config = json.load(f)
+                    
+                # Store settings to apply after UI creation
+                self.saved_settings = config
+            else:
+                self.saved_settings = {}
+        except Exception as e:
+            print(f"Error loading settings: {e}")
+            self.saved_settings = {}
+            
+    def save_settings(self):
+        """Save current settings to config file"""
+        try:
+            config = {
+                'monitor_index': self.monitor_spin.value() if hasattr(self, 'monitor_spin') else 0,
+                'background_folder': self.bg_folder_edit.text() if hasattr(self, 'bg_folder_edit') else "",
+                'rank_font': self.rank_font_combo.currentText() if hasattr(self, 'rank_font_combo') else "arial.ttf",
+                'rank_font_size': self.rank_font_size.value() if hasattr(self, 'rank_font_size') else 60,
+                'rank_font_color': self.rank_font_color.currentText() if hasattr(self, 'rank_font_color') else "white",
+                'final_font_size': self.final_font_size.value() if hasattr(self, 'final_font_size') else 120,
+                'current_background': self.current_background,
+                'round_text': self.round_edit.text() if hasattr(self, 'round_edit') else "",
+                'round_position': self.round_pos_edit.text() if hasattr(self, 'round_pos_edit') else "1286,917"
+            }
+            
+            # Save ranking data
+            if hasattr(self, 'rank_edits'):
+                config['ranking_data'] = {rank: edit.text() for rank, edit in self.rank_edits.items()}
+                config['ranking_positions'] = {rank: edit.text() for rank, edit in self.rank_pos_edits.items()}
+                
+            # Save final results data
+            if hasattr(self, 'final_edits'):
+                config['final_data'] = {key: edit.text() for key, edit in self.final_edits.items()}
+                config['final_positions'] = {key: edit.text() for key, edit in self.final_pos_edits.items()}
+            
+            with open(self.config_file, 'w', encoding='utf-8') as f:
+                json.dump(config, f, indent=2, ensure_ascii=False)
+                
+        except Exception as e:
+            print(f"Error saving settings: {e}")
+            
+    def apply_saved_settings(self):
+        """Apply saved settings to UI elements"""
+        if not self.saved_settings:
+            # Set default font size for final results to 120
+            if hasattr(self, 'final_font_size'):
+                self.final_font_size.setValue(120)
+            return
+            
+        try:
+            # Apply monitor setting
+            if hasattr(self, 'monitor_combo') and 'monitor_index' in self.saved_settings:
+                monitor_index = self.saved_settings['monitor_index']
+                if monitor_index < self.monitor_combo.count():
+                    self.monitor_combo.setCurrentIndex(monitor_index)
+                    
+            # Apply background folder
+            if hasattr(self, 'bg_folder_edit') and 'background_folder' in self.saved_settings:
+                self.bg_folder_edit.setText(self.saved_settings['background_folder'])
+                
+            # Apply font settings
+            if hasattr(self, 'rank_font_combo') and 'rank_font' in self.saved_settings:
+                index = self.rank_font_combo.findText(self.saved_settings['rank_font'])
+                if index >= 0:
+                    self.rank_font_combo.setCurrentIndex(index)
+                    
+            if hasattr(self, 'rank_font_size') and 'rank_font_size' in self.saved_settings:
+                self.rank_font_size.setValue(self.saved_settings['rank_font_size'])
+                
+            if hasattr(self, 'rank_font_color') and 'rank_font_color' in self.saved_settings:
+                index = self.rank_font_color.findText(self.saved_settings['rank_font_color'])
+                if index >= 0:
+                    self.rank_font_color.setCurrentIndex(index)
+                    
+            # Apply final font size (default 120 if not saved)
+            if hasattr(self, 'final_font_size'):
+                final_size = self.saved_settings.get('final_font_size', 120)
+                self.final_font_size.setValue(final_size)
+                
+            # Apply current background
+            if 'current_background' in self.saved_settings:
+                self.current_background = self.saved_settings['current_background']
+                
+            # Apply round settings
+            if hasattr(self, 'round_edit') and 'round_text' in self.saved_settings:
+                self.round_edit.setText(self.saved_settings['round_text'])
+                
+            if hasattr(self, 'round_pos_edit') and 'round_position' in self.saved_settings:
+                self.round_pos_edit.setText(self.saved_settings['round_position'])
+                
+            # Apply ranking data
+            if hasattr(self, 'rank_edits') and 'ranking_data' in self.saved_settings:
+                for rank, text in self.saved_settings['ranking_data'].items():
+                    if rank in self.rank_edits:
+                        self.rank_edits[rank].setText(text)
+                        
+            if hasattr(self, 'rank_pos_edits') and 'ranking_positions' in self.saved_settings:
+                for rank, pos in self.saved_settings['ranking_positions'].items():
+                    if rank in self.rank_pos_edits:
+                        self.rank_pos_edits[rank].setText(pos)
+                        
+            # Apply final data
+            if hasattr(self, 'final_edits') and 'final_data' in self.saved_settings:
+                for key, text in self.saved_settings['final_data'].items():
+                    if key in self.final_edits:
+                        self.final_edits[key].setText(text)
+                        
+            if hasattr(self, 'final_pos_edits') and 'final_positions' in self.saved_settings:
+                for key, pos in self.saved_settings['final_positions'].items():
+                    if key in self.final_pos_edits:
+                        self.final_pos_edits[key].setText(pos)
+                        
+        except Exception as e:
+            print(f"Error applying saved settings: {e}")
         
     def setup_ui(self):
         """Setup user interface"""
@@ -171,6 +325,16 @@ class ScoShowRemoteControl(QMainWindow):
         
         # Status log
         self.create_status_section(main_layout)
+        
+        # Apply default round position and font size for Ranking
+        if hasattr(self, 'round_pos_edit'):
+            self.round_pos_edit.setText(self.default_round_position)
+        if hasattr(self, 'rank_font_size'):
+            self.rank_font_size.setValue(self.default_rank_font_size)
+
+        # Apply default font size for Final results
+        if hasattr(self, 'final_font_size'):
+            self.final_font_size.setValue(self.default_final_font_size)
         
     def create_connection_section(self, layout):
         """Create connection status section"""
@@ -224,12 +388,21 @@ class ScoShowRemoteControl(QMainWindow):
         setup_group = QGroupBox("🖥️ Setup")
         setup_layout = QGridLayout(setup_group)
         
-        # Monitor selection
+        # Monitor selection with detected monitors
         setup_layout.addWidget(QLabel("Monitor:"), 0, 0)
+        self.monitor_combo = QComboBox()
+        for monitor_name in self.available_monitors:
+            self.monitor_combo.addItem(monitor_name)
+        setup_layout.addWidget(self.monitor_combo, 0, 1)
+        
+        # Keep spin box for compatibility but hidden
         self.monitor_spin = QSpinBox()
-        self.monitor_spin.setRange(0, 9)
+        self.monitor_spin.setRange(0, len(self.available_monitors)-1)
         self.monitor_spin.setValue(0)
-        setup_layout.addWidget(self.monitor_spin, 0, 1)
+        self.monitor_spin.hide()
+        
+        # Sync combo with spin box
+        self.monitor_combo.currentIndexChanged.connect(self.monitor_spin.setValue)
         
         # Background folder
         setup_layout.addWidget(QLabel("Background Folder:"), 1, 0)
@@ -507,6 +680,8 @@ class ScoShowRemoteControl(QMainWindow):
         
         if self.mqtt_handler.send_command('commands', data):
             self.status_log.append(f"[{time.strftime('%H:%M:%S')}] SENT: Open display command")
+            # Tự động hiển thị WAIT(00) sau khi mở display
+            QTimer.singleShot(1000, lambda: self.show_background("00"))
         else:
             QMessageBox.warning(self, "Error", "Failed to send command - MQTT not connected")
             
@@ -529,11 +704,16 @@ class ScoShowRemoteControl(QMainWindow):
             QMessageBox.warning(self, "Error", "Failed to send command - MQTT not connected")
             
     def switch_monitor(self):
-        """Send switch monitor command"""
+        """Send switch monitor command và maintain current content"""
         data = {
             'action': 'switch_monitor',
-            'monitor_index': self.monitor_spin.value()
+            'monitor_index': self.monitor_spin.value(),
+            'maintain_content': True
         }
+        
+        # Nếu có background đang hiển thị, gửi thông tin để duy trì
+        if hasattr(self, 'current_background') and self.current_background:
+            data['current_background'] = self.current_background
         
         if self.mqtt_handler.send_command('commands', data):
             self.status_log.append(f"[{time.strftime('%H:%M:%S')}] SENT: Switch monitor command")
@@ -542,6 +722,9 @@ class ScoShowRemoteControl(QMainWindow):
             
     def show_background(self, bg_id):
         """Send show background command"""
+        # Lưu background hiện tại
+        self.current_background = bg_id
+        
         data = {
             'action': 'show_background',
             'background_id': bg_id
