@@ -252,38 +252,40 @@ Vị trí đã lưu: {self.stored_geometry if self.stored_geometry else 'Chưa c
         """Hiển thị ảnh nền với overlay text"""
         if bg_id not in self.background_paths:
             return False
-            
+
         try:
             # Mở ảnh nền
             background_path = self.background_paths[bg_id]
             image = Image.open(background_path).copy()
-            
+
             # Thêm text overlay nếu có
             if overlay_data:
                 self.add_text_overlay(image, bg_id, overlay_data)
-            
-            # Lấy kích thước cửa sổ
-            window_size = self.image_label.size()
-            window_width = window_size.width()
-            window_height = window_size.height()
-            
-            if window_width <= 1 or window_height <= 1:
-                window_width = 1920
-                window_height = 1080
-            
-            # Resize ảnh để fit cửa sổ
-            image.thumbnail((window_width, window_height), Image.Resampling.LANCZOS)
-            
+
+            # Lấy kích thước màn hình hiện tại (màn hình mà cửa sổ đang hiển thị)
+            current_screen = QApplication.desktop().screenNumber(self)
+            screen_geometry = QApplication.desktop().screenGeometry(current_screen)
+            screen_width = screen_geometry.width()
+
+            # Tính toán chiều cao dựa trên tỷ lệ ảnh gốc
+            original_aspect_ratio = image.width / image.height
+            new_height = int(screen_width / original_aspect_ratio)
+
+            # Resize ảnh để chiều ngang bằng màn hình, chiều cao theo tỷ lệ
+            resized_image = image.resize((screen_width, new_height), Image.Resampling.LANCZOS)
+
             # Chuyển đổi PIL Image sang QPixmap
-            image_rgb = image.convert('RGB')
+            image_rgb = resized_image.convert('RGB')
             qimg = self.pil_to_qpixmap(image_rgb)
-            
-            # Hiển thị ảnh
+
+            # Hiển thị ảnh với kích thước thực tế (không scale)
+            self.image_label.setScaledContents(False)
             self.image_label.setPixmap(qimg)
-            
+
             self.current_background = bg_id
+            print(f"Image resized to: {screen_width}x{new_height} (aspect ratio: {original_aspect_ratio:.2f})")
             return True
-            
+
         except Exception as e:
             print(f"Lỗi khi hiển thị ảnh nền {bg_id}: {e}")
             return False
