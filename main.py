@@ -405,9 +405,10 @@ class TournamentControlPanel(QMainWindow):
         
     def setup_window(self):
         """Thiết lập cửa sổ chính"""
-        self.setWindowTitle("ScoShow - Tournament Control (PyQt Version)")
-        self.setGeometry(100, 100, 1000, 900)
-        self.setMinimumSize(960, 886)
+        self.setWindowTitle("ScoShow - Tournament Ranking")
+        self.setGeometry(100, 100, 1000, 760)
+        self.setMinimumSize(1000, 760)
+        self.setMaximumSize(1000, 760)  # Cố định kích thước
         
         # Đặt cửa sổ ở giữa màn hình chính (monitor 0)
         desktop = QApplication.desktop()
@@ -457,39 +458,64 @@ class TournamentControlPanel(QMainWindow):
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         
-        # Layout chính với scroll
+        # Layout chính - loại bỏ scroll area
         main_layout = QVBoxLayout(central_widget)
-        
-        # Scroll area
-        scroll_area = QScrollArea()
-        scroll_widget = QWidget()
-        scroll_layout = QVBoxLayout(scroll_widget)
+        main_layout.setSpacing(1)
+        main_layout.setContentsMargins(5, 2, 5, 5)
         
         # Header
-        self.create_header(scroll_layout)
+        self.create_header(main_layout)
+        
+        # Layout ngang cho phần trên (Monitor/Background Setup + Display Control)
+        top_layout = QHBoxLayout()
+        top_layout.setSpacing(8)
+        
+        # Cột trái trên - Setup
+        top_left_column = QVBoxLayout()
+        top_left_column.setSpacing(3)
         
         # Monitor setup
-        self.create_monitor_section(scroll_layout)
+        self.create_monitor_section(top_left_column)
         
         # Background setup
-        self.create_background_section(scroll_layout)
+        self.create_background_section(top_left_column)
+        
+        # Cột phải trên - Display Control
+        top_right_column = QVBoxLayout()
+        top_right_column.setSpacing(3)
         
         # Display controls
-        self.create_display_controls(scroll_layout)
+        self.create_display_controls(top_right_column)
+        
+        # Thêm các cột vào layout trên
+        top_layout.addLayout(top_left_column, 1)
+        top_layout.addLayout(top_right_column, 1)
+        
+        main_layout.addLayout(top_layout)
+        
+        # Layout ngang cho phần dưới (Ranking + Final Results)
+        bottom_layout = QHBoxLayout()
+        bottom_layout.setSpacing(8)
+        
+        # Cột trái dưới - Ranking
+        bottom_left_column = QVBoxLayout()
+        bottom_left_column.setSpacing(3)
         
         # Ranking input (Background 01)
-        self.create_ranking_section(scroll_layout)
+        self.create_ranking_section(bottom_left_column)
+        
+        # Cột phải dưới - Final Results
+        bottom_right_column = QVBoxLayout()
+        bottom_right_column.setSpacing(3)
         
         # Final results (Background 02)
-        self.create_final_section(scroll_layout)
+        self.create_final_section(bottom_right_column)
         
-        # Status
-        self.create_status_section(scroll_layout)
+        # Thêm các cột vào layout dưới
+        bottom_layout.addLayout(bottom_left_column, 1)
+        bottom_layout.addLayout(bottom_right_column, 1)
         
-        # Thiết lập scroll area
-        scroll_area.setWidget(scroll_widget)
-        scroll_area.setWidgetResizable(True)
-        main_layout.addWidget(scroll_area)
+        main_layout.addLayout(bottom_layout)
         
     def create_header(self, layout):
         """Tạo header"""
@@ -497,72 +523,85 @@ class TournamentControlPanel(QMainWindow):
         header_frame.setStyleSheet("""
             QFrame {
                 background-color: #2C3E50;
-                border-radius: 5px;
-                margin: 5px;
+                border-radius: 3px;
+                margin: 0px;
             }
             QLabel {
                 color: #ECF0F1;
-                padding: 10px;
+                padding: 2px;
             }
         """)
-        header_layout = QVBoxLayout(header_frame)
+        header_frame.setMaximumHeight(40)
+        header_frame.setContentsMargins(5, 0, 5, 0)
+        header_layout = QHBoxLayout(header_frame)
+        header_layout.setSpacing(0)
+        header_layout.setContentsMargins(5, 3, 5, 3)
         
-        title = QLabel("🏆 ScoShow - Tournament Ranking (PyQt Version)")
-        title.setFont(QFont("Arial", 16, QFont.Bold))
-        title.setAlignment(Qt.AlignCenter)
+        title = QLabel("🏆 ScoShow")
+        title.setFont(QFont("Arial", 14, QFont.Bold))
+        title.setAlignment(Qt.AlignLeft)
         header_layout.addWidget(title)
         
-        subtitle = QLabel("Professional Tournament Display System - Enhanced Multi-Monitor Support")
-        subtitle.setFont(QFont("Arial", 9, QFont.StyleItalic))
-        subtitle.setAlignment(Qt.AlignCenter)
-        header_layout.addWidget(subtitle)
+        # Debug status
+        self.status_label = QLabel("Ready | Enhanced PyQt version")
+        self.status_label.setFont(QFont("Arial", 9))
+        self.status_label.setStyleSheet("color: #27AE60;")
+        self.status_label.setAlignment(Qt.AlignRight)
+        header_layout.addWidget(self.status_label)
         
         layout.addWidget(header_frame)
         
     def create_monitor_section(self, layout):
         """Tạo section chọn màn hình"""
         group = QGroupBox("🖥️ Monitor Setup")
+        group.setMaximumHeight(120)
+        group.setFont(QFont("Arial", 10, QFont.Bold))
         group_layout = QVBoxLayout(group)
+        group_layout.setSpacing(2)
         
         # Thông tin màn hình
         monitors = get_monitors()
         info_label = QLabel(f"📺 Detected {len(monitors)} monitor(s)")
-        info_label.setFont(QFont("Arial", 9, QFont.Bold))
+        info_label.setFont(QFont("Arial", 10, QFont.Bold))
         info_label.setStyleSheet("color: #2980B9;")
         group_layout.addWidget(info_label)
         
-        # Chọn màn hình
+        # Layout ngang cho chọn màn hình và nút toggle
         monitor_layout = QHBoxLayout()
-        monitor_layout.addWidget(QLabel("Display on Monitor:"))
+        monitor_layout.addWidget(QLabel("Display on:"))
         
         self.monitor_combo = QComboBox()
+        self.monitor_combo.setMaximumHeight(28)
+        self.monitor_combo.setFont(QFont("Arial", 9))
         for i, monitor in enumerate(monitors):
             self.monitor_combo.addItem(f"Monitor {i+1} ({monitor.width}x{monitor.height})")
         self.monitor_combo.setCurrentIndex(self.selected_monitor)
         monitor_layout.addWidget(self.monitor_combo)
         
-        group_layout.addLayout(monitor_layout)
+        # Nút toggle screen
+        toggle_btn = QPushButton("🔄 Switch")
+        toggle_btn.setMaximumHeight(28)
+        toggle_btn.setMaximumWidth(80)
+        toggle_btn.clicked.connect(self.switch_monitor)
+        toggle_btn.setStyleSheet(self.get_button_style("#8E44AD"))
+        toggle_btn.setFont(QFont("Arial", 9, QFont.Bold))
+        monitor_layout.addWidget(toggle_btn)
         
-        # Status
-        if len(monitors) > 1:
-            status_text = "✅ Multiple monitors available - Choose monitor above"
-            color = "#27AE60"
-        else:
-            status_text = "⚠️ Only 1 monitor - will display in window"
-            color = "#F39C12"
-            
-        status_label = QLabel(status_text)
-        status_label.setStyleSheet(f"color: {color}; font-size: 10px;")
-        group_layout.addWidget(status_label)
+        group_layout.addLayout(monitor_layout)
         
         layout.addWidget(group)
         
     def create_background_section(self, layout):
         """Tạo section chọn background"""
         group = QGroupBox("🖼️ Background Setup")
+        group.setMaximumHeight(120)
+        group.setFont(QFont("Arial", 10, QFont.Bold))
         group_layout = QHBoxLayout(group)
+        group_layout.setSpacing(50)
         
-        bg_button = QPushButton("📁 Select Background Folder")
+        bg_button = QPushButton("📁 Select Folder")
+        bg_button.setMaximumHeight(35)
+        bg_button.setFont(QFont("Arial", 10, QFont.Bold))
         bg_button.clicked.connect(self.select_background_folder)
         bg_button.setStyleSheet("""
             QPushButton {
@@ -570,7 +609,7 @@ class TournamentControlPanel(QMainWindow):
                 color: white;
                 font-weight: bold;
                 padding: 8px;
-                border-radius: 4px;
+                border-radius: 5px;
             }
             QPushButton:hover {
                 background-color: #3498DB;
@@ -579,7 +618,8 @@ class TournamentControlPanel(QMainWindow):
         group_layout.addWidget(bg_button)
         
         self.bg_status_label = QLabel("❌ No folder selected")
-        self.bg_status_label.setStyleSheet("color: #E74C3C; font-weight: bold;")
+        self.bg_status_label.setStyleSheet("color: #E74C3C; font-weight: bold; font-size: 12px;")
+        self.bg_status_label.setFont(QFont("Arial", 10, QFont.Bold))
         group_layout.addWidget(self.bg_status_label)
         
         layout.addWidget(group)
@@ -587,27 +627,35 @@ class TournamentControlPanel(QMainWindow):
     def create_display_controls(self, layout):
         """Tạo controls cho display"""
         group = QGroupBox("🎮 Display Control")
+        group.setMaximumHeight(190)
+        group.setFont(QFont("Arial", 10, QFont.Bold))
         group_layout = QVBoxLayout(group)
+        group_layout.setSpacing(8)
         
         # Nút điều khiển display
         display_layout = QHBoxLayout()
+        display_layout.setSpacing(8)
         
-        open_btn = QPushButton("🚀 Open Display")
+        open_btn = QPushButton("🚀 Open")
+        open_btn.setMaximumHeight(30)
+        open_btn.setMaximumWidth(90)
+        open_btn.setFont(QFont("Arial", 9, QFont.Bold))
         open_btn.clicked.connect(self.open_display)
         open_btn.setStyleSheet(self.get_button_style("#229954"))
         display_layout.addWidget(open_btn)
         
-        fullscreen_btn = QPushButton("🖥️ Toggle Fullscreen")
+        fullscreen_btn = QPushButton("🖥️ Full")
+        fullscreen_btn.setMaximumHeight(30)
+        fullscreen_btn.setMaximumWidth(90)
+        fullscreen_btn.setFont(QFont("Arial", 9, QFont.Bold))
         fullscreen_btn.clicked.connect(self.toggle_display_fullscreen)
         fullscreen_btn.setStyleSheet(self.get_button_style("#2980B9"))
         display_layout.addWidget(fullscreen_btn)
         
-        switch_btn = QPushButton("🔄 Switch Monitor")
-        switch_btn.clicked.connect(self.switch_monitor)
-        switch_btn.setStyleSheet(self.get_button_style("#2980B9"))
-        display_layout.addWidget(switch_btn)
-        
-        close_btn = QPushButton("🔴 Close Display")
+        close_btn = QPushButton("� Close")
+        close_btn.setMaximumHeight(30)
+        close_btn.setMaximumWidth(90)
+        close_btn.setFont(QFont("Arial", 9, QFont.Bold))
         close_btn.clicked.connect(self.close_display)
         close_btn.setStyleSheet(self.get_button_style("#E67E22"))
         display_layout.addWidget(close_btn)
@@ -616,18 +664,25 @@ class TournamentControlPanel(QMainWindow):
         
         # Nút chọn background
         bg_layout = QHBoxLayout()
+        bg_layout.setSpacing(8)
         
-        bg00_btn = QPushButton("⏸️ Show 00 (Waiting)")
+        bg00_btn = QPushButton("⏸️ Wait")
+        bg00_btn.setMaximumHeight(30)
+        bg00_btn.setFont(QFont("Arial", 9, QFont.Bold))
         bg00_btn.clicked.connect(lambda: self.show_background("00"))
         bg00_btn.setStyleSheet(self.get_button_style("#2980B9"))
         bg_layout.addWidget(bg00_btn)
         
-        bg01_btn = QPushButton("📊 Show 01 (Ranking)")
+        bg01_btn = QPushButton("📊 Rank")
+        bg01_btn.setMaximumHeight(30)
+        bg01_btn.setFont(QFont("Arial", 9, QFont.Bold))
         bg01_btn.clicked.connect(lambda: self.show_background("01"))
         bg01_btn.setStyleSheet(self.get_button_style("#229954"))
         bg_layout.addWidget(bg01_btn)
         
-        bg02_btn = QPushButton("🏆 Show 02 (Final)")
+        bg02_btn = QPushButton("🏆 Final")
+        bg02_btn.setMaximumHeight(30)
+        bg02_btn.setFont(QFont("Arial", 9, QFont.Bold))
         bg02_btn.clicked.connect(lambda: self.show_background("02"))
         bg02_btn.setStyleSheet(self.get_button_style("#E67E22"))
         bg_layout.addWidget(bg02_btn)
@@ -642,9 +697,9 @@ class TournamentControlPanel(QMainWindow):
                 background-color: {color};
                 color: white;
                 font-weight: bold;
-                padding: 8px;
+                padding: 6px;
                 border-radius: 4px;
-                min-width: 100px;
+                font-size: 12px;
             }}
             QPushButton:hover {{
                 background-color: {color}DD;
@@ -654,53 +709,115 @@ class TournamentControlPanel(QMainWindow):
     def create_ranking_section(self, layout):
         """Tạo section input ranking"""
         group = QGroupBox("📊 Ranking Input (Background 01)")
+        group.setMaximumHeight(600)
+        group.setMaximumWidth(500)
+        group.setFont(QFont("Arial", 9, QFont.Bold))
         group_layout = QVBoxLayout(group)
+        group_layout.setSpacing(3)
         
-        # Font settings
+        # Font settings - compact but readable
         font_frame = QFrame()
-        font_frame.setStyleSheet("background-color: #F8F9FA; border-radius: 5px; padding: 5px;")
+        font_frame.setStyleSheet("background-color: #F8F9FA; border-radius: 3px; padding: 5px;")
+        font_frame.setMaximumHeight(60)
         font_layout = QHBoxLayout(font_frame)
+        font_layout.setSpacing(8)
         
-        font_layout.addWidget(QLabel("🎨 Font:"))
+        font_layout.addWidget(QLabel("Font:"))
         self.font_combo = QComboBox()
-        self.font_combo.addItems(["arial.ttf", "times.ttf", "calibri.ttf", "verdana.ttf"])
+        self.font_combo.setMaximumHeight(60)
+        self.font_combo.setFont(QFont("Arial", 9))
+        self.font_combo.addItems(["arial.ttf", "times.ttf", "calibri.ttf"])
         font_layout.addWidget(self.font_combo)
         
         font_layout.addWidget(QLabel("Size:"))
         self.rank_font_size_edit = QLineEdit(self.rank_font_size)
-        self.rank_font_size_edit.setMaximumWidth(50)
+        self.rank_font_size_edit.setMaximumWidth(45)
+        self.rank_font_size_edit.setMaximumHeight(60)
+        self.rank_font_size_edit.setFont(QFont("Arial", 9))
+        self.rank_font_size_edit.setStyleSheet("""
+            QLineEdit {
+                border: 1px solid #CCC;
+                border-radius: 3px;
+                padding: 3px;
+                background-color: white;
+                font-size: 11px;
+            }
+            QLineEdit:focus {
+                border: 2px solid #3498DB;
+            }
+        """)
         font_layout.addWidget(self.rank_font_size_edit)
         
         font_layout.addWidget(QLabel("Color:"))
         self.font_color_combo = QComboBox()
-        self.font_color_combo.addItems(["white", "black", "red", "blue", "green", "yellow"])
+        self.font_color_combo.setMaximumHeight(50)
+        self.font_color_combo.setMaximumWidth(80)
+        self.font_color_combo.setFont(QFont("Arial", 9))
+        self.font_color_combo.addItems(["white", "black", "red", "blue", "yellow"])
         font_layout.addWidget(self.font_color_combo)
         
         group_layout.addWidget(font_frame)
         
-        # Round input
+        # Simple Round input frame - no separate font settings
         round_frame = QFrame()
-        round_frame.setStyleSheet("background-color: #E8F4FD; border-radius: 5px; padding: 5px;")
+        round_frame.setStyleSheet("background-color: #E8F4FD; border-radius: 3px; padding: 8px;")
+        round_frame.setMaximumHeight(80)
         round_layout = QHBoxLayout(round_frame)
+        round_layout.setSpacing(8)
+
+        round_label = QLabel("Round:")
+        round_label.setFont(QFont("Arial", 10, QFont.Bold))
+        round_layout.addWidget(round_label)
         
-        round_layout.addWidget(QLabel("🔄 Round:"))
         self.round_edit = QLineEdit()
+        self.round_edit.setMaximumHeight(32)
+        self.round_edit.setMinimumWidth(120)
+        self.round_edit.setFont(QFont("Arial", 12, QFont.Bold))
+        self.round_edit.setStyleSheet("""
+            QLineEdit {
+                border: 2px solid #3498DB;
+                border-radius: 4px;
+                padding: 8px;
+                background-color: white;
+                font-size: 14px;
+                font-weight: bold;
+            }
+            QLineEdit:focus {
+                border: 2px solid #2980B9;
+                background-color: #F8F9FA;
+            }
+        """)
         round_layout.addWidget(self.round_edit)
         
-        round_layout.addWidget(QLabel("Position (x,y):"))
-        self.round_pos_edit = QLineEdit(self.round_position)
-        round_layout.addWidget(self.round_pos_edit)
+        pos_label = QLabel("Position:")
+        pos_label.setFont(QFont("Arial", 10, QFont.Bold))
+        round_layout.addWidget(pos_label)
         
-        round_layout.addWidget(QLabel("Font Size:"))
-        self.round_font_size_edit = QLineEdit(self.round_font_size)
-        self.round_font_size_edit.setMaximumWidth(50)
-        round_layout.addWidget(self.round_font_size_edit)
+        self.round_pos_edit = QLineEdit(self.round_position)
+        self.round_pos_edit.setMaximumHeight(32)
+        self.round_pos_edit.setMaximumWidth(120)
+        self.round_pos_edit.setFont(QFont("Arial", 10))
+        self.round_pos_edit.setStyleSheet("""
+            QLineEdit {
+                border: 2px solid #CCC;
+                border-radius: 4px;
+                padding: 8px;
+                background-color: white;
+                font-size: 12px;
+            }
+            QLineEdit:focus {
+                border: 2px solid #3498DB;
+                background-color: #F8F9FA;
+            }
+        """)
+        round_layout.addWidget(self.round_pos_edit)
         
         group_layout.addWidget(round_frame)
         
-        # Ranking inputs
+        # Ranking inputs - 2 cột
         ranking_frame = QFrame()
         ranking_layout = QGridLayout(ranking_frame)
+        ranking_layout.setSpacing(3)
         
         self.rank_edits = {}
         self.rank_pos_edits = {}
@@ -710,19 +827,53 @@ class TournamentControlPanel(QMainWindow):
             row = i % 5
             col = (i // 5) * 3
             
-            ranking_layout.addWidget(QLabel(f"{rank}:"), row, col)
+            label = QLabel(f"{rank}:")
+            label.setMaximumWidth(35)
+            label.setFont(QFont("Arial", 9, QFont.Bold))
+            ranking_layout.addWidget(label, row, col)
             
             self.rank_edits[rank] = QLineEdit()
+            self.rank_edits[rank].setMaximumHeight(26)
+            self.rank_edits[rank].setMaximumWidth(180)
+            self.rank_edits[rank].setFont(QFont("Arial", 9))
+            self.rank_edits[rank].setStyleSheet("""
+                QLineEdit {
+                    border: 1px solid #CCC;
+                    border-radius: 3px;
+                    padding: 4px;
+                    background-color: white;
+                    font-size: 11px;
+                }
+                QLineEdit:focus {
+                    border: 2px solid #3498DB;
+                }
+            """)
             ranking_layout.addWidget(self.rank_edits[rank], row, col + 1)
             
             self.rank_pos_edits[rank] = QLineEdit(self.rank_positions[rank])
-            self.rank_pos_edits[rank].setMaximumWidth(80)
+            self.rank_pos_edits[rank].setMaximumWidth(60)
+            self.rank_pos_edits[rank].setMaximumHeight(26)
+            self.rank_pos_edits[rank].setFont(QFont("Arial", 8))
+            self.rank_pos_edits[rank].setStyleSheet("""
+                QLineEdit {
+                    border: 1px solid #CCC;
+                    border-radius: 3px;
+                    padding: 3px;
+                    background-color: white;
+                    font-size: 10px;
+                }
+                QLineEdit:focus {
+                    border: 2px solid #3498DB;
+                }
+            """)
             ranking_layout.addWidget(self.rank_pos_edits[rank], row, col + 2)
             
         group_layout.addWidget(ranking_frame)
         
-        # Apply button
+        # Apply button - compact
         apply_btn = QPushButton("✅ Apply Ranking")
+        apply_btn.setMaximumHeight(32)
+        apply_btn.setFont(QFont("Arial", 10, QFont.Bold))
         apply_btn.clicked.connect(self.apply_ranking)
         apply_btn.setStyleSheet(self.get_button_style("#229954"))
         group_layout.addWidget(apply_btn)
@@ -731,74 +882,127 @@ class TournamentControlPanel(QMainWindow):
         
     def create_final_section(self, layout):
         """Tạo section final results"""
-        group = QGroupBox("🏆 Final Results Input (Background 02)")
+        group = QGroupBox("🏆 Final Results (Background 02)")
+        group.setMaximumHeight(400)
+        group.setMaximumWidth(500)
+        group.setFont(QFont("Arial", 9, QFont.Bold))
         group_layout = QVBoxLayout(group)
+        group_layout.setSpacing(1)
         
-        # Font settings cho final
+        # Font settings cho final - readable
         final_font_frame = QFrame()
-        final_font_frame.setStyleSheet("background-color: #FEF9E7; border-radius: 5px; padding: 5px;")
+        final_font_frame.setStyleSheet("background-color: #FEF9E7; border-radius: 3px; padding: 5px;")
+        final_font_frame.setMaximumHeight(60)
         final_font_layout = QHBoxLayout(final_font_frame)
+        final_font_layout.setSpacing(8)
         
-        final_font_layout.addWidget(QLabel("🎨 Font:"))
-        final_font_layout.addWidget(QLabel("(Uses same as ranking)"))
-        
-        final_font_layout.addWidget(QLabel("Size:"))
+        font_size_label = QLabel("Font Size:")
+        font_size_label.setFont(QFont("Arial", 9, QFont.Bold))
+        final_font_layout.addWidget(font_size_label)
         self.final_font_size_edit = QLineEdit(self.final_font_size)
         self.final_font_size_edit.setMaximumWidth(50)
+        self.final_font_size_edit.setMaximumHeight(60)
+        self.final_font_size_edit.setFont(QFont("Arial", 10))
+        self.final_font_size_edit.setStyleSheet("""
+            QLineEdit {
+                border: 1px solid #CCC;
+                border-radius: 3px;
+                padding: 4px;
+                background-color: white;
+                font-size: 12px;
+                font-weight: bold;
+            }
+            QLineEdit:focus {
+                border: 2px solid #3498DB;
+            }
+        """)
         final_font_layout.addWidget(self.final_font_size_edit)
+        
+        info_label = QLabel("(Uses same font & color as ranking)")
+        info_label.setFont(QFont("Arial", 8, QFont.StyleItalic))
+        info_label.setStyleSheet("color: #666;")
+        final_font_layout.addWidget(info_label)
         
         group_layout.addWidget(final_font_frame)
         
-        # Final results inputs
+        # Final results inputs - grid layout like ranking
         final_frame = QFrame()
-        final_frame.setStyleSheet("background-color: #FDEDEC; border-radius: 5px; padding: 5px;")
+        final_frame.setStyleSheet("background-color: #FDEDEC; border-radius: 3px; padding: 8px;")
         final_layout = QGridLayout(final_frame)
+        final_layout.setSpacing(1)
         
         self.final_edits = {}
         self.final_pos_edits = {}
         
         final_labels = {
-            'winner': '🥇 1st Place:', 'second': '🥈 2nd Place:', 'third': '🥉 3rd Place:',
-            'fourth': '🏅 4th Place:', 'fifth': '🎖️ 5th Place:'
+            'winner': '🥇 1st:', 'second': '🥈 2nd:', 'third': '🥉 3rd:',
+            'fourth': '🏅 4th:', 'fifth': '🎖️ 5th:'
         }
         
         for i, (key, label) in enumerate(final_labels.items()):
-            final_layout.addWidget(QLabel(label), i, 0)
+            row = i % 3  # 3 rows max
+            col = (i // 3) * 3  # 3 columns per group
             
+            # Label
+            label_widget = QLabel(label)
+            label_widget.setMaximumWidth(60)
+            label_widget.setMinimumWidth(60)
+            label_widget.setFont(QFont("Arial", 9, QFont.Bold))
+            label_widget.setAlignment(Qt.AlignLeft)
+            final_layout.addWidget(label_widget, row, col)
+            
+            # Name input - larger and more visible
             self.final_edits[key] = QLineEdit()
-            final_layout.addWidget(self.final_edits[key], i, 1)
+            self.final_edits[key].setMaximumHeight(28)
+            self.final_edits[key].setMinimumWidth(80)
+            self.final_edits[key].setMaximumWidth(160)
+            self.final_edits[key].setFont(QFont("Arial", 12))
+            self.final_edits[key].setStyleSheet("""
+                QLineEdit {
+                    border: 1px solid #CCC;
+                    border-radius: 4px;
+                    padding: 6px;
+                    background-color: white;
+                    font-size: 12px;
+                    font-weight: bold;
+                }
+                QLineEdit:focus {
+                    border: 2px solid #3498DB;
+                    background-color: #F8F9FA;
+                }
+            """)
+            final_layout.addWidget(self.final_edits[key], row, col + 1)
             
-            final_layout.addWidget(QLabel("Position:"), i, 2)
+            # Position input - larger
             self.final_pos_edits[key] = QLineEdit(self.final_positions[key])
             self.final_pos_edits[key].setMaximumWidth(100)
-            final_layout.addWidget(self.final_pos_edits[key], i, 3)
+            self.final_pos_edits[key].setMaximumHeight(28)
+            self.final_pos_edits[key].setFont(QFont("Arial", 9))
+            self.final_pos_edits[key].setStyleSheet("""
+                QLineEdit {
+                    border: 1px solid #CCC;
+                    border-radius: 3px;
+                    padding: 5px;
+                    background-color: white;
+                    font-size: 11px;
+                }
+                QLineEdit:focus {
+                    border: 2px solid #3498DB;
+                }
+            """)
+            final_layout.addWidget(self.final_pos_edits[key], row, col + 2)
             
         group_layout.addWidget(final_frame)
         
         # Apply button
         apply_final_btn = QPushButton("🏆 Apply Final Results")
+        apply_final_btn.setMaximumHeight(32)
+        apply_final_btn.setFont(QFont("Arial", 10, QFont.Bold))
         apply_final_btn.clicked.connect(self.apply_final_results)
         apply_final_btn.setStyleSheet(self.get_button_style("#E67E22"))
         group_layout.addWidget(apply_final_btn)
         
         layout.addWidget(group)
-        
-    def create_status_section(self, layout):
-        """Tạo status section"""
-        status_frame = QFrame()
-        status_frame.setStyleSheet("background-color: #E8F6F3; border-radius: 5px; padding: 10px;")
-        status_layout = QVBoxLayout(status_frame)
-        
-        status_title = QLabel("📊 System Status")
-        status_title.setFont(QFont("Arial", 9, QFont.Bold))
-        status_title.setStyleSheet("color: #27AE60;")
-        status_layout.addWidget(status_title)
-        
-        self.status_label = QLabel("Ready to start tournament display\n💡 Enhanced PyQt version with better multi-monitor fullscreen support")
-        self.status_label.setWordWrap(True)
-        status_layout.addWidget(self.status_label)
-        
-        layout.addWidget(status_frame)
         
     def select_background_folder(self):
         """Chọn thư mục background"""
@@ -916,11 +1120,12 @@ class TournamentControlPanel(QMainWindow):
                 
         overlay_data['positions'] = positions
         
-        # Font settings
+        # Font settings - simplified (using same font/size for round and ranking)
+        rank_font_size = int(self.rank_font_size_edit.text()) if self.rank_font_size_edit.text().isdigit() else 60
         font_settings = {
             'font_name': self.font_combo.currentText(),
-            'rank_font_size': int(self.rank_font_size_edit.text()) if self.rank_font_size_edit.text().isdigit() else 60,
-            'round_font_size': int(self.round_font_size_edit.text()) if self.round_font_size_edit.text().isdigit() else 60,
+            'rank_font_size': rank_font_size,
+            'round_font_size': rank_font_size,  # Use same size for round as ranking
             'color': self.font_color_combo.currentText()
         }
         overlay_data['font_settings'] = font_settings
@@ -1022,6 +1227,7 @@ class TournamentControlPanel(QMainWindow):
                 'final_positions': {key: edit.text() for key, edit in self.final_pos_edits.items()} if hasattr(self, 'final_pos_edits') else self.final_positions,
                 'font_name': self.font_combo.currentText() if hasattr(self, 'font_combo') else self.font_name,
                 'font_color': self.font_color_combo.currentText() if hasattr(self, 'font_color_combo') else self.font_color,
+                'rank_font_size': self.rank_font_size_edit.text() if hasattr(self, 'rank_font_size_edit') else self.rank_font_size,
                 'rank_font_size': self.rank_font_size_edit.text() if hasattr(self, 'rank_font_size_edit') else self.rank_font_size,
                 'final_font_size': self.final_font_size_edit.text() if hasattr(self, 'final_font_size_edit') else self.final_font_size
             }

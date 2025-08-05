@@ -1,6 +1,6 @@
 {
-  "background_folder": "",
-  "selected_monitor": 0,
+  "background_folder": "B:/Python/Projects/ScoShow/background",
+  "selected_monitor": 1,
   "round_position": "1286,917",
   "round_font_size": "60",
   "rank_positions": {
@@ -16,14 +16,14 @@
     "10th": "2000,600"
   },
   "final_positions": {
-    "winner": "1920,300",
+    "winner": "1920,320",
     "second": "1920,450",
     "third": "1920,600",
     "fourth": "1920,750",
     "fifth": "1920,900"
   },
   "font_name": "arial.ttf",
-  "font_color": "yellow",
-  "rank_font_size": "60",
-  "final_font_size": "60"
+  "font_color": "white",
+  "rank_font_size": "100",
+  "final_font_size": "120"
 }
