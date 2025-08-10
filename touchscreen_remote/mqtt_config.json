@@ -1,0 +1,20 @@
+{
+  "broker": "localhost",
+  "port": 1883,
+  "username": "",
+  "password": "",
+  "client_id": "scoshow_main",
+  "keepalive": 60,
+  "topics": {
+    "commands": "scoshow/commands",
+    "status": "scoshow/status", 
+    "display": "scoshow/display",
+    "ranking": "scoshow/ranking",
+    "final": "scoshow/final",
+    "touch_status": "scoshow/touch/status"
+  },
+  "qos": 1,
+  "retain": true,
+  "auto_reconnect": true,
+  "reconnect_delay": 5
+}

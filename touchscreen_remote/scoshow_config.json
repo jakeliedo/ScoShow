@@ -1,0 +1,29 @@
+{
+  "background_folder": "D:/Python/Projects/ScoShow/background",
+  "selected_monitor": 1,
+  "round_position": "1286,917",
+  "round_font_size": "60",
+  "rank_positions": {
+    "1st": "2980,125",
+    "2nd": "2980,220",
+    "3rd": "2980,318",
+    "4th": "2980,402",
+    "5th": "2980,495",
+    "6th": "2980,578",
+    "7th": "2980,672",
+    "8th": "2980,762",
+    "9th": "2980,850",
+    "10th": "2980,939"
+  },
+  "final_positions": {
+    "winner": "3000,80",
+    "second": "3000,280",
+    "third": "3000,480",
+    "fourth": "3000,680",
+    "fifth": "3000,880"
+  },
+  "font_name": "arial.ttf",
+  "font_color": "white",
+  "rank_font_size": "60",
+  "final_font_size": "60"
+}

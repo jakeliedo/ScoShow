@@ -1,0 +1,19 @@
+# ScoShow Touchscreen Remote - Unified Requirements
+# Merged from root requirements, requirements_mqtt, requirements_exe
+# Core runtime dependencies
+paho-mqtt>=1.6.1
+PyQt5>=5.15.11
+Pillow>=9.3.0
+screeninfo>=0.8.1
+pyserial>=3.5
+requests>=2.28.0
+
+# Optional system / monitoring features
+psutil>=5.9.0
+# netifaces can provide additional network interface info; comment out if build issues on Windows
+netifaces>=0.11.0
+
+# Packaging (only needed if you plan to build an EXE for the remote)
+pyinstaller>=6.15.0
+
+# End of file

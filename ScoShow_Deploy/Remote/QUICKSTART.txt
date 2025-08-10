@@ -1,8 +1,0 @@
-# ScoShow Remote Control - Quick Start 
- 
-1. Run ScoShow_Remote.exe 
-2. Wait for "MQTT: Connected" (green) 
-3. Wait for "Client: Online" when client connects 
-4. Use Display Control tab to open display window 
-5. Use Ranking tab to enter and display rankings 
-6. Use Final Results tab for tournament endings 
