@@ -1,26 +1,26 @@
 {
-  "monitor_index": 2,
+  "monitor_index": 0,
   "background_folder": "",
   "rank_font": "arial.ttf",
   "rank_font_size": 80,
   "rank_font_color": "white",
   "final_font_size": 120,
-  "current_background": "01",
+  "current_background": "02",
   "current_display_mode": "fullscreen",
-  "current_content_type": "background",
+  "current_content_type": "final",
   "round_text": "",
   "round_position": "1286,935",
   "ranking_data": {
-    "1st": "",
-    "2nd": "",
-    "3rd": "",
-    "4th": "",
-    "5th": "",
-    "6th": "",
-    "7th": "",
-    "8th": "",
-    "9th": "",
-    "10th": ""
+    "1st": "dầda",
+    "2nd": "fafa",
+    "3rd": "âfafa",
+    "4th": "fafaf",
+    "5th": "àầ",
+    "6th": "fafgafga",
+    "7th": "gagas",
+    "8th": "agagag",
+    "9th": "ágág",
+    "10th": "agaaga"
   },
   "ranking_positions": {
     "1st": "2980,125",
@@ -35,11 +35,11 @@
     "10th": "2980,939"
   },
   "final_data": {
-    "winner": "",
-    "second": "",
-    "third": "",
-    "fourth": "",
-    "fifth": ""
+    "winner": "5135135165161",
+    "second": "613631631631",
+    "third": "6161631613616136",
+    "fourth": "136321764745",
+    "fifth": "7246123671272"
   },
   "final_positions": {
     "winner": "3000,80",
