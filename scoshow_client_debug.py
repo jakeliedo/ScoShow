@@ -11,7 +11,7 @@ import threading
 import time
 import logging
 from datetime import datetime
-from PyQt5.QtWidgets import QApplication, QMainWindow, QSystemTrayIcon, QMenu, QAction, QMessageBox
+from PyQt5.QtWidgets import QApplication, QMainWindow, QSystemTrayIcon, QMenu, QAction, QMessageBox, QFileDialog, QPushButton, QVBoxLayout, QWidget
 from PyQt5.QtCore import QTimer, pyqtSignal, QObject
 from PyQt5.QtGui import QIcon
 import paho.mqtt.client as mqtt
@@ -33,7 +33,8 @@ def debug_print(message):
     timestamp = datetime.now().strftime("%H:%M:%S")
     print(f"[{timestamp}] {message}")
     logger.info(message)
-    sys.stdout.flush()  # Force immediate output
+    if sys.stdout:  # Check if stdout exists before flushing
+        sys.stdout.flush()  # Force immediate output
 
 class MQTTHandler(QObject):
     """Handle MQTT communication"""
@@ -182,15 +183,39 @@ class MQTTHandler(QObject):
         else:
             debug_print(f"⚠️  Cannot send status (not connected): {status} - {message}")
             
+    def get_monitor_info(self):
+        """Get monitor information for this client"""
+        try:
+            from screeninfo import get_monitors
+            monitors = get_monitors()
+            monitor_list = []
+            for i, monitor in enumerate(monitors):
+                monitor_info = f"Monitor {i+1} ({monitor.width}x{monitor.height})"
+                if hasattr(monitor, 'name') and monitor.name:
+                    monitor_info += f" - {monitor.name}"
+                monitor_list.append(monitor_info)
+            debug_print(f"🖥️ Detected {len(monitor_list)} monitors:")
+            for i, info in enumerate(monitor_list):
+                debug_print(f"   {i}: {info}")
+            return monitor_list
+        except Exception as e:
+            debug_print(f"❌ Error detecting monitors: {e}")
+            return ["Monitor 1 (Primary)"]
+            
     def send_heartbeat(self):
-        """Send heartbeat"""
+        """Send heartbeat with additional info"""
         if self.connected:
             data = {
                 'timestamp': time.time(),
-                'client_id': 'scoshow_client'
+                'client_id': 'scoshow_client',
+                'monitor_info': self.get_monitor_info(),
+                'display_status': 'closed' if not hasattr(self, 'display_window') or not self.display_window else 'open',
+                'current_background': getattr(self, 'current_background', 'unknown'),
+                'client_version': '1.0.0',
+                'uptime': time.time() - getattr(self, 'start_time', time.time())
             }
             self.client.publish(MQTT_TOPICS['heartbeat'], json.dumps(data), MQTT_QOS)
-            debug_print("💓 Heartbeat sent")
+            debug_print("💓 Enhanced heartbeat sent with monitor info")
         else:
             debug_print("⚠️  Cannot send heartbeat (not connected)")
 
@@ -207,8 +232,13 @@ class ScoShowClient(QMainWindow):
         self.display_window = None
         self.background_folder = ""
         self.current_mode = None
+        self.current_background = "unknown"
         self.mqtt_handler = None
+        self.start_time = time.time()  # Track start time for uptime
         
+        # Setup UI
+        self.setup_ui()
+
         # Setup system tray
         debug_print("🔧 Setting up system tray...")
         self.setup_tray()
@@ -224,6 +254,24 @@ class ScoShowClient(QMainWindow):
         debug_print("✅ ScoShow Client initialization complete!")
         debug_print("=" * 50)
         
+    def setup_ui(self):
+        """Setup the main UI components"""
+        self.setWindowTitle("ScoShow Client Debug")
+        self.setGeometry(100, 100, 400, 200)
+
+        # Create a central widget and layout
+        central_widget = QWidget()
+        layout = QVBoxLayout()
+
+        # Add a button to select background folder
+        select_folder_button = QPushButton("Select Background Folder")
+        select_folder_button.clicked.connect(self.select_background_folder)
+        layout.addWidget(select_folder_button)
+
+        # Set the layout to the central widget
+        central_widget.setLayout(layout)
+        self.setCentralWidget(central_widget)
+
     def setup_tray(self):
         """Setup system tray icon and menu"""
         debug_print("🔧 Creating system tray icon...")
@@ -240,6 +288,11 @@ class ScoShowClient(QMainWindow):
         tray_menu.addAction(self.status_action)
         
         tray_menu.addSeparator()
+        
+        # Add action to select background folder
+        select_folder_action = QAction("Select Background Folder", self)
+        select_folder_action.triggered.connect(self.select_background_folder)
+        tray_menu.addAction(select_folder_action)
         
         # Show display action
         show_action = QAction("Show Display", self)
@@ -358,6 +411,71 @@ class ScoShowClient(QMainWindow):
         elif action == 'switch_monitor':
             monitor_index = data.get('monitor_index', 0)
             self.switch_monitor(monitor_index)
+            
+        elif action == 'debug_info':
+            self.handle_debug_request(data)
+            
+        elif action == 'ping':
+            self.handle_ping_request(data)
+            
+    def handle_debug_request(self, data):
+        """Handle debug information requests"""
+        request_type = data.get('request_type', 'unknown')
+        debug_print(f"🐛 Debug request: {request_type}")
+        
+        if request_type == 'client_info':
+            self.send_client_info()
+        elif request_type == 'monitor_info':
+            self.send_monitor_info()
+        else:
+            debug_print(f"❓ Unknown debug request: {request_type}")
+            
+    def handle_ping_request(self, data):
+        """Handle ping request"""
+        debug_print("🏓 Ping request received")
+        response_data = {
+            'status': 'pong',
+            'message': 'Connection test successful',
+            'timestamp': time.time(),
+            'request_timestamp': data.get('timestamp', 0),
+            'response_time': time.time() - data.get('timestamp', 0)
+        }
+        
+        if self.mqtt_handler:
+            self.mqtt_handler.send_status("pong", "Connection test response")
+            debug_print("🏓 Pong response sent")
+            
+    def send_client_info(self):
+        """Send detailed client information"""
+        debug_print("📋 Sending client info...")
+        import platform
+        import sys
+        
+        client_info = {
+            'client_version': '1.0.0-debug',
+            'python_version': sys.version,
+            'platform': platform.platform(),
+            'hostname': platform.node(),
+            'processor': platform.processor(),
+            'uptime': time.time() - self.start_time,
+            'display_status': 'open' if self.display_window else 'closed',
+            'current_background': self.current_background,
+            'background_folder': self.background_folder,
+            'timestamp': time.time()
+        }
+        
+        if self.mqtt_handler:
+            self.mqtt_handler.send_status("client_info", f"Client info: {client_info}")
+            debug_print("📋 Client info sent")
+            
+    def send_monitor_info(self):
+        """Send monitor information"""
+        debug_print("🖥️ Sending monitor info...")
+        monitor_info = self.mqtt_handler.get_monitor_info() if self.mqtt_handler else ["Monitor 1 (Primary)"]
+        
+        if self.mqtt_handler:
+            self.mqtt_handler.send_status("monitor_info", f"Monitors: {monitor_info}")
+            debug_print(f"🖥️ Monitor info sent: {monitor_info}")
             
     def handle_ranking_command(self, data):
         """Handle ranking update commands"""
@@ -531,11 +649,34 @@ class ScoShowClient(QMainWindow):
         event.ignore()  # Don't close, just hide
         self.hide()
 
+    def select_background_folder(self):
+        """Open dialog to select background folder"""
+        while True:
+            folder = QFileDialog.getExistingDirectory(self, "Select Background Folder")
+            if folder:
+                # Check if the folder contains at least 3 valid image files with specific names
+                required_files = ["00", "01", "02"]
+                valid_extensions = [".jpg", ".png", ".jpeg"]
+                valid_files = [f for f in required_files if any(os.path.exists(os.path.join(folder, f + ext)) for ext in valid_extensions)]
+
+                if len(valid_files) == 3:
+                    self.background_folder = folder
+                    debug_print(f"📂 Background folder selected: {self.background_folder}")
+                    QMessageBox.information(self, "Success", "Library Set!")
+                    self.resize(200, 100)  # Shrink the window size
+                    break
+                else:
+                    QMessageBox.warning(self, "Invalid Folder", "The selected folder must contain at least 3 image files named 00, 01, and 02 with valid extensions (.jpg, .png, .jpeg). Please select again.")
+            else:
+                break
+
 def main():
     """Main function"""
     print("🚀 Starting ScoShow Client (Debug Version)")
     print("Console logging is enabled for debugging")
     print("=" * 50)
+    
+    debug_print(f"🚀 Starting ScoShow Client Debug with Session ID: {UNIQUE_ID}")
     
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)  # Keep running in system tray
@@ -549,6 +690,7 @@ def main():
     
     try:
         client = ScoShowClient()
+        client.show()  # Ensure the main window is displayed
         debug_print("🎯 Starting main application loop...")
         sys.exit(app.exec_())
     except Exception as e:

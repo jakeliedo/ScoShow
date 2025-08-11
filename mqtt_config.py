@@ -22,22 +22,13 @@ import os
 import json
 
 def get_or_create_session_id():
-    """Get existing session ID or create new one"""
+    """Get fixed session ID for tournament ranking system"""
     session_file = 'mqtt_session.json'
     
-    # Try to load existing session ID
-    if os.path.exists(session_file):
-        try:
-            with open(session_file, 'r') as f:
-                data = json.load(f)
-                return data.get('session_id', None)
-        except:
-            pass
+    # Fixed session ID for club tournament ranking 2025
+    session_id = "clubvtournamentranking2025"
     
-    # Create new session ID if not exists
-    session_id = ''.join(random.choices(string.ascii_lowercase + string.digits, k=8))
-    
-    # Save to file
+    # Always save the fixed session ID to file
     try:
         with open(session_file, 'w') as f:
             json.dump({'session_id': session_id}, f)
