@@ -9,8 +9,8 @@ mkdir "ScoShow_Deploy\Client"
 mkdir "ScoShow_Deploy\Remote"
 
 :: Copy executables
-copy "dist\ScoShow_Client.exe" "ScoShow_Deploy\Client\"
-copy "dist\ScoShow_Remote.exe" "ScoShow_Deploy\Remote\"
+copy "dist\ScoShow_Client_Debug.exe" "ScoShow_Deploy\Client\ScoShow_Client.exe"
+copy "dist\ScoShow_Remote_Super.exe" "ScoShow_Deploy\Remote\ScoShow_Remote.exe"
 
 :: Copy background folder for client
 xcopy "background" "ScoShow_Deploy\Client\background\" /E /I
