@@ -64,20 +64,36 @@ class DataInputPopup(QDialog):
         
         layout = QVBoxLayout(self)
         
-        # Instructions
-        instructions = QLabel("""
+        # Instructions - different for final vs rank
+        if self.tab_type == "final":
+            instructions = QLabel("""
+🏆 Final Results Data Input:
+Simply paste the member numbers, one per line:
+60050
+555  
+60111
+1002431
+1012353
+
+(First line = 1st place, second line = 2nd place, etc.)
+            """)
+        else:
+            instructions = QLabel("""
 Paste your data here (Tab-separated format):
 Round	MB	NAME	Credit	Last Bet
 Round 1	60050	HO CUONG DIEU	30900	
 Round 1	555	CHWEE WAI ONN	21180	
 ...
-        """)
+            """)
         instructions.setStyleSheet("font-size: 10px; color: gray; padding: 5px;")
         layout.addWidget(instructions)
         
         # Data input area
         self.data_input = QTextEdit(self)
-        self.data_input.setPlaceholderText("Paste your data here...")
+        if self.tab_type == "final":
+            self.data_input.setPlaceholderText("Paste member numbers here, one per line:\n60050\n555\n60111\n...")
+        else:
+            self.data_input.setPlaceholderText("Paste your data here...")
         layout.addWidget(self.data_input)
         
         # Button layout
@@ -136,23 +152,36 @@ Round 1	555	CHWEE WAI ONN	21180
             return
             
         try:
-            parsed_data = self.parse_data(raw_data)
+            # Use different parsing for final vs rank
+            if self.tab_type == "final":
+                parsed_data = self.parse_final_data(raw_data)
+            else:
+                parsed_data = self.parse_data(raw_data)
             
             if not parsed_data:
                 QMessageBox.warning(self, "Warning", "No valid data found!")
                 return
                 
             # Show preview
-            preview_text = f"Found {len(parsed_data)} rows:\n"
-            for i, row in enumerate(parsed_data[:5]):  # Show first 5 rows
-                preview_text += f"Rank {row.get('position', 'N/A')}: Round {row.get('round', 'N/A')}, MB={row.get('mb', 'N/A')}, Name={row.get('name', 'N/A')}\n"
+            if self.tab_type == "final":
+                preview_text = f"Found {len(parsed_data)} final positions:\n"
+                for i, row in enumerate(parsed_data[:5]):  # Show first 5 rows
+                    preview_text += f"Position {row.get('position', 'N/A')}: {row.get('name', 'N/A')}\n"
+            else:
+                preview_text = f"Found {len(parsed_data)} rows:\n"
+                for i, row in enumerate(parsed_data[:5]):  # Show first 5 rows
+                    preview_text += f"Rank {row.get('position', 'N/A')}: Round {row.get('round', 'N/A')}, MB={row.get('mb', 'N/A')}, Name={row.get('name', 'N/A')}\n"
+            
             if len(parsed_data) > 5:
                 preview_text += f"... and {len(parsed_data) - 5} more rows"
                 
             # Debug: Print parsed data details
             debug_print(f"🔍 Parsed data details:")
             for i, row in enumerate(parsed_data):
-                debug_print(f"   Row {i+1}: Position={row.get('position')}, Round={row.get('round')}, MB={row.get('mb')}, Name={row.get('name')}")
+                if self.tab_type == "final":
+                    debug_print(f"   Row {i+1}: Position={row.get('position')}, Name={row.get('name')}")
+                else:
+                    debug_print(f"   Row {i+1}: Position={row.get('position')}, Round={row.get('round')}, MB={row.get('mb')}, Name={row.get('name')}")
                 
             self.preview_label.setText(preview_text)
             
@@ -171,6 +200,67 @@ Round 1	555	CHWEE WAI ONN	21180
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to process data: {str(e)}")
             debug_print(f"❌ Error processing data: {e}")
+    
+    def parse_final_data(self, raw_data):
+        """Parse final results data - simplified version that only requires member numbers"""
+        debug_print(f"🏆 Parsing final results data (simplified)")
+        debug_print(f"Raw data length: {len(raw_data)} characters")
+        debug_print(f"Raw data preview: {raw_data[:200]}...")
+        
+        rows = raw_data.split('\n')
+        parsed_data = []
+        
+        # Filter out empty rows and clean data
+        clean_rows = []
+        for row in rows:
+            row_stripped = row.strip()
+            if row_stripped:
+                clean_rows.append(row_stripped)
+        
+        debug_print(f"🔍 Found {len(clean_rows)} non-empty rows")
+        for i, row in enumerate(clean_rows[:10]):  # Show first 10
+            debug_print(f"   Row {i+1}: '{row}'")
+        
+        if not clean_rows:
+            debug_print("❌ No data rows found after filtering")
+            return parsed_data
+        
+        # Simple parsing: each line is just a member number
+        position = 1
+        for row_index, row in enumerate(clean_rows[:5]):  # Only take first 5 for final
+            row = row.strip()
+            
+            # Skip obvious headers or non-numeric content
+            if any(word in row.lower() for word in ['round', 'member', 'name', 'position', 'rank']):
+                debug_print(f"   Skipping header row: '{row}'")
+                continue
+            
+            # Try to extract member number - could be just a number or part of text
+            member_number = None
+            
+            # If the row is purely numeric, use it directly
+            if row.isdigit():
+                member_number = row
+            else:
+                # Try to extract number from text like "60050" or "Member: 60050" 
+                numbers = re.findall(r'\b\d{3,}\b', row)  # Find numbers with 3+ digits
+                if numbers:
+                    member_number = numbers[0]  # Take the first substantial number
+            
+            if member_number:
+                data_row = {
+                    'position': position,
+                    'name': member_number,
+                    'member_id': member_number
+                }
+                parsed_data.append(data_row)
+                debug_print(f"   ✅ Added final position {position}: {member_number}")
+                position += 1
+            else:
+                debug_print(f"   ❌ Could not extract member number from: '{row}'")
+        
+        debug_print(f"✅ Successfully parsed {len(parsed_data)} final positions")
+        return parsed_data
             
     def parse_data(self, raw_data):
         """Parse the raw data into structured format with Round X validation"""
