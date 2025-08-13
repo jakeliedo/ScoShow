@@ -174,68 +174,259 @@ Round 1	555	CHWEE WAI ONN	21180
             
     def parse_data(self, raw_data):
         """Parse the raw data into structured format with Round X validation"""
+        debug_print(f"🔍 Starting to parse raw data:")
+        debug_print(f"Raw data length: {len(raw_data)} characters")
+        debug_print(f"Raw data preview: {raw_data[:200]}...")
+        
         rows = raw_data.split('\n')
         parsed_data = []
         
-        # Filter out empty rows
-        data_rows = []
+        # Filter out empty rows and clean data
+        clean_rows = []
         for row in rows:
-            if row.strip():
-                data_rows.append(row.strip())
+            row_stripped = row.strip()
+            if row_stripped:
+                clean_rows.append(row_stripped)
         
-        if not data_rows:
+        debug_print(f"🔍 Found {len(clean_rows)} non-empty rows")
+        for i, row in enumerate(clean_rows[:10]):  # Show first 10
+            debug_print(f"   Row {i+1}: '{row}'")
+        
+        if not clean_rows:
+            debug_print("❌ No data rows found after filtering")
             return parsed_data
+        
+        # Format detection
+        columnar_format = False
+        line_by_line_format = False
+        
+        # Check for columnar format - look for rows that have "Round X" and a number on the same line
+        for row in clean_rows[:5]:  # Check first 5 rows
+            if '\t' in row or ('round' in row.lower() and len(row.split()) >= 2):
+                # Check if it looks like "Round 1 60050" or "Round 1\t60050"
+                parts = row.split('\t') if '\t' in row else row.split()
+                if len(parts) >= 2:
+                    # For 3+ parts like "Round 1 60050", check if first two parts form "Round X"
+                    if len(parts) >= 3:
+                        round_part = f"{parts[0]} {parts[1]}"  # "Round 1"
+                        number_part = parts[2]  # The member ID
+                    else:
+                        round_part = parts[0]  # "Round1" or similar
+                        number_part = parts[1]  # The member ID
+                    
+                    if (re.search(r'round\s*\d+', round_part.lower()) and 
+                        number_part.isdigit() and len(number_part) > 2):  # Member IDs are usually longer
+                        columnar_format = True
+                        break
+        
+        # Check for line-by-line format - alternating "Round X" and number lines
+        if not columnar_format and len(clean_rows) >= 2:
+            consecutive_round_lines = 0
             
-        # Validate Round format and extract round number
+            for i in range(0, min(len(clean_rows), 10), 2):  # Check pairs
+                if i + 1 < len(clean_rows):
+                    line1 = clean_rows[i].strip()
+                    line2 = clean_rows[i + 1].strip()
+                    
+                    # Check if line1 is "Round X" and line2 is a number
+                    if (re.search(r'^round\s+\d+$', line1.lower()) and 
+                        line2.isdigit() and len(line2) > 2):
+                        consecutive_round_lines += 1
+                    else:
+                        break
+            
+            # If we found at least 2 consecutive pairs, it's likely line-by-line format
+            if consecutive_round_lines >= 2:
+                line_by_line_format = True
+        
+        debug_print(f"🔍 Detected format: {'Columnar' if columnar_format else 'Line-by-line' if line_by_line_format else 'Auto-detect'}")
+        
         round_number = None
         
-        for row_index, row in enumerate(data_rows):
-            if not row.strip():
-                continue
+        if line_by_line_format:
+            debug_print("📋 Using LINE-BY-LINE parsing strategy")
+            # Parse line-by-line format: alternating "Round X" and member number lines
+            i = 0
+            while i < len(clean_rows) - 1:
+                row1 = clean_rows[i].strip()
+                row2 = clean_rows[i + 1].strip()
                 
-            # Try tab-separated first, then comma, then space
-            columns = row.split('\t')
-            if len(columns) < 2:
-                columns = row.split(',')
-            if len(columns) < 2:
-                columns = row.split()
+                debug_print(f"🔍 Processing line-by-line pair {i//2 + 1}: '{row1}' + '{row2}'")
                 
-            if len(columns) >= 2:
-                try:
-                    round_info = columns[0].strip()
-                    rank_value = columns[1].strip()
-                    
-                    # Extract and validate round number from "Round X" format
-                    import re
-                    round_match = re.search(r'round\s+(\d+)', round_info.lower())
-                    if not round_match:
-                        debug_print(f"❌ Invalid round format in row {row_index + 1}: '{round_info}' (expected 'Round X')")
-                        return []
-                    
+                # Check if first row is "Round X" format
+                round_match = re.search(r'round\s+(\d+)', row1.lower())
+                if round_match and row2.isdigit():
                     current_round = int(round_match.group(1))
+                    member_value = row2
                     
-                    # Validate that all rows have the same round number
+                    debug_print(f"   Round info: '{row1}', Member value: '{member_value}'")
+                    debug_print(f"   Extracted round number: {current_round}")
+                    
+                    # Validate consistent round number
                     if round_number is None:
                         round_number = current_round
+                        debug_print(f"   Set round number to: {round_number}")
                     elif round_number != current_round:
-                        debug_print(f"❌ Inconsistent round number in row {row_index + 1}: found 'Round {current_round}', expected 'Round {round_number}'")
-                        return []
+                        debug_print(f"❌ Inconsistent round number in pair {i//2 + 1}: found 'Round {current_round}', expected 'Round {round_number}'")
+                        i += 2
+                        continue
                     
-                    # Position is based on order (1st, 2nd, 3rd, etc.)
-                    position = row_index + 1
+                    # Position is based on order in the parsed data
+                    position = len(parsed_data) + 1
                     
                     data_row = {
                         'round': round_number,
                         'position': position,
-                        'name': rank_value,  # The rank value goes into name field
-                        'rank': f"{position}{'st' if position == 1 else 'nd' if position == 2 else 'rd' if position == 3 else 'th'}"
+                        'name': member_value,
+                        'rank': f"{position}{'st' if position == 1 else 'nd' if position == 2 else 'rd' if position == 3 else 'th'}",
+                        'member_id': member_value
                     }
                     parsed_data.append(data_row)
+                    debug_print(f"   ✅ Added data row: Position={position}, Round={round_number}, Member={member_value}")
                     
-                except (ValueError, IndexError) as e:
-                    debug_print(f"❌ Error parsing row {row_index + 1}: {e}")
-                    return []
+                    i += 2  # Move to next pair
+                else:
+                    debug_print(f"❌ Invalid pair in lines {i+1}-{i+2}: '{row1}' + '{row2}' (expected 'Round X' + number)")
+                    i += 1  # Try next line
+                    
+        elif columnar_format:
+            debug_print("📋 Using COLUMNAR parsing strategy")
+            # Parse columnar format: "Round 1\t60050" or "Round 1 60050"
+            for row_index, row in enumerate(clean_rows):
+                debug_print(f"🔍 Processing columnar row {row_index + 1}: '{row}'")
                 
+                # Try different separators: tab, multiple spaces, single space, comma
+                columns = []
+                if '\t' in row:
+                    columns = [col.strip() for col in row.split('\t') if col.strip()]
+                    debug_print(f"   Using tab separation: {columns}")
+                elif '  ' in row:  # Multiple spaces
+                    columns = [col.strip() for col in row.split() if col.strip()]
+                    debug_print(f"   Using space separation: {columns}")
+                elif ',' in row:
+                    columns = [col.strip() for col in row.split(',') if col.strip()]
+                    debug_print(f"   Using comma separation: {columns}")
+                else:
+                    columns = [col.strip() for col in row.split() if col.strip()]
+                    debug_print(f"   Using default split: {columns}")
+                    
+                if len(columns) >= 2:
+                    # Handle both "Round 1 60050" (3 parts) and "Round1 60050" (2 parts)
+                    if len(columns) >= 3 and columns[0].lower() == 'round' and columns[1].isdigit():
+                        # Format: "Round 1 60050"
+                        round_info = f"{columns[0]} {columns[1]}"
+                        member_value = columns[2]
+                    elif len(columns) >= 2:
+                        # Format: "Round1 60050" or any other 2-column format
+                        round_info = columns[0]
+                        member_value = columns[1]
+                    else:
+                        debug_print(f"❌ Unexpected column format in row {row_index + 1}")
+                        continue
+                    
+                    debug_print(f"   Round info: '{round_info}', Member value: '{member_value}'")
+                    
+                    # Extract and validate round number
+                    round_match = re.search(r'round\s*(\d+)', round_info.lower())
+                    if not round_match:
+                        debug_print(f"❌ Invalid round format in row {row_index + 1}: '{round_info}' (expected 'Round X')")
+                        continue
+                    
+                    current_round = int(round_match.group(1))
+                    debug_print(f"   Extracted round number: {current_round}")
+                    
+                    # Validate consistent round number
+                    if round_number is None:
+                        round_number = current_round
+                        debug_print(f"   Set round number to: {round_number}")
+                    elif round_number != current_round:
+                        debug_print(f"❌ Inconsistent round number in row {row_index + 1}: found 'Round {current_round}', expected 'Round {round_number}'")
+                        continue
+                    
+                    # Position is based on order in the parsed data
+                    position = len(parsed_data) + 1
+                    
+                    data_row = {
+                        'round': round_number,
+                        'position': position,
+                        'name': member_value,
+                        'rank': f"{position}{'st' if position == 1 else 'nd' if position == 2 else 'rd' if position == 3 else 'th'}",
+                        'member_id': member_value
+                    }
+                    parsed_data.append(data_row)
+                    debug_print(f"   ✅ Added data row: Position={position}, Round={round_number}, Member={member_value}")
+                else:
+                    debug_print(f"❌ Insufficient columns in row {row_index + 1}: {len(columns)} columns found, need at least 2")
+        else:
+            debug_print("📋 Using AUTO-DETECT parsing strategy")
+            # Auto-detect and try both formats
+            # Try columnar format first
+            for row_index, row in enumerate(clean_rows):
+                debug_print(f"🔍 Processing auto-detect row {row_index + 1}: '{row}'")
+                
+                # Try different separators: tab, multiple spaces, single space, comma
+                columns = []
+                if '\t' in row:
+                    columns = [col.strip() for col in row.split('\t') if col.strip()]
+                    debug_print(f"   Using tab separation: {columns}")
+                elif '  ' in row:  # Multiple spaces
+                    columns = [col.strip() for col in row.split() if col.strip()]
+                    debug_print(f"   Using space separation: {columns}")
+                elif ',' in row:
+                    columns = [col.strip() for col in row.split(',') if col.strip()]
+                    debug_print(f"   Using comma separation: {columns}")
+                else:
+                    columns = [col.strip() for col in row.split() if col.strip()]
+                    debug_print(f"   Using default split: {columns}")
+                    
+                if len(columns) >= 2:
+                    # Handle both "Round 1 60050" (3 parts) and "Round1 60050" (2 parts)
+                    if len(columns) >= 3 and columns[0].lower() == 'round' and columns[1].isdigit():
+                        # Format: "Round 1 60050"
+                        round_info = f"{columns[0]} {columns[1]}"
+                        member_value = columns[2]
+                    elif len(columns) >= 2:
+                        # Format: "Round1 60050" or any other 2-column format
+                        round_info = columns[0]
+                        member_value = columns[1]
+                    else:
+                        debug_print(f"❌ Unexpected column format in row {row_index + 1}")
+                        continue
+                    
+                    debug_print(f"   Round info: '{round_info}', Member value: '{member_value}'")
+                    
+                    # Extract and validate round number
+                    round_match = re.search(r'round\s*(\d+)', round_info.lower())
+                    if not round_match:
+                        debug_print(f"❌ Invalid round format in row {row_index + 1}: '{round_info}' (expected 'Round X'), skipping")
+                        continue
+                    
+                    current_round = int(round_match.group(1))
+                    debug_print(f"   Extracted round number: {current_round}")
+                    
+                    # Validate consistent round number
+                    if round_number is None:
+                        round_number = current_round
+                        debug_print(f"   Set round number to: {round_number}")
+                    elif round_number != current_round:
+                        debug_print(f"❌ Inconsistent round number in row {row_index + 1}: found 'Round {current_round}', expected 'Round {round_number}'")
+                        continue
+                    
+                    # Position is based on order in the parsed data
+                    position = len(parsed_data) + 1
+                    
+                    data_row = {
+                        'round': round_number,
+                        'position': position,
+                        'name': member_value,
+                        'rank': f"{position}{'st' if position == 1 else 'nd' if position == 2 else 'rd' if position == 3 else 'th'}",
+                        'member_id': member_value
+                    }
+                    parsed_data.append(data_row)
+                    debug_print(f"   ✅ Added data row: Position={position}, Round={round_number}, Member={member_value}")
+                else:
+                    debug_print(f"❌ Insufficient columns in row {row_index + 1}: {len(columns)} columns found, need at least 2")
+                    
         debug_print(f"✅ Successfully parsed {len(parsed_data)} rows for Round {round_number}")
         return parsed_data
 
@@ -411,6 +602,15 @@ class ScoShowRemoteControlSuper(QMainWindow):
         self.current_content_type = None
         self.available_monitors = []
         
+        # State management for each monitor
+        self.monitor_states = {
+            0: {"background": "00", "fullscreen": False, "display_open": False},
+            1: {"background": "00", "fullscreen": False, "display_open": False},
+            2: {"background": "00", "fullscreen": False, "display_open": False},
+            3: {"background": "00", "fullscreen": False, "display_open": False}
+        }
+        self.current_monitor_index = 0
+        
         # Setup default positions (from enhanced version)
         self.default_rank_positions = {
             '1st': "2980,125", '2nd': "2980,220", '3rd': "2980,318", 
@@ -562,6 +762,15 @@ class ScoShowRemoteControlSuper(QMainWindow):
                 # Custom client selection (if we add more options later)
                 return "all"
         return CLIENT_ID  # Default to this computer only
+    
+    def debug_monitor_states(self):
+        """Debug function to show current monitor states"""
+        debug_print("🔍 CURRENT MONITOR STATES:")
+        for monitor_idx, state in self.monitor_states.items():
+            debug_print(f"   Monitor {monitor_idx}: {state}")
+        debug_print(f"🎯 Current monitor index: {self.current_monitor_index}")
+        debug_print(f"📺 Current display mode: {self.current_display_mode}")
+        debug_print(f"🖼️ Current background: {self.current_background}")
         
     def create_display_tab(self):
         """Create display control tab"""
@@ -964,7 +1173,7 @@ class ScoShowRemoteControlSuper(QMainWindow):
             
         # Update round information
         if parsed_data[0].get('round'):
-            self.round_edit.setText(f"Round {parsed_data[0]['round']}")
+            self.round_edit.setText(str(parsed_data[0]['round']))
             
         if tab_type == "rank":
             # Update ranking fields with new data structure
@@ -1216,7 +1425,13 @@ class ScoShowRemoteControlSuper(QMainWindow):
         }
         
         if self.mqtt_handler.send_command('commands', data, target_client):
+            # Update current monitor index and state
+            self.current_monitor_index = self.monitor_spin.value()
+            self.monitor_states[self.current_monitor_index]["display_open"] = True
+            
             debug_print(f"📤 Sent open display command to target: {target_client}")
+            debug_print(f"💾 Set monitor {self.current_monitor_index} display_open to True")
+            
             if hasattr(self, 'status_log'):
                 self.status_log.append(f"[{time.strftime('%H:%M:%S')}] SENT: Open display command to {target_client}")
             # Tự động hiển thị WAIT(00) sau khi mở display
@@ -1231,7 +1446,14 @@ class ScoShowRemoteControlSuper(QMainWindow):
         data = {'action': 'close_display'}
         
         if self.mqtt_handler.send_command('commands', data, target_client):
+            # Update current monitor state
+            self.monitor_states[self.current_monitor_index]["display_open"] = False
+            self.monitor_states[self.current_monitor_index]["fullscreen"] = False
+            self.current_display_mode = "windowed"
+            
             debug_print(f"📤 Sent close display command to target: {target_client}")
+            debug_print(f"💾 Set monitor {self.current_monitor_index} display_open to False")
+            
             if hasattr(self, 'status_log'):
                 self.status_log.append(f"[{time.strftime('%H:%M:%S')}] SENT: Close display command to {target_client}")
         else:
@@ -1246,7 +1468,13 @@ class ScoShowRemoteControlSuper(QMainWindow):
         if self.mqtt_handler.send_command('commands', data, target_client):
             # Chuyển đổi trạng thái hiển thị
             self.current_display_mode = 'fullscreen' if self.current_display_mode == 'windowed' else 'windowed'
+            
+            # Update current monitor state
+            self.monitor_states[self.current_monitor_index]["fullscreen"] = (self.current_display_mode == "fullscreen")
+            
             debug_print(f"📤 Sent toggle fullscreen command to target: {target_client}")
+            debug_print(f"💾 Updated monitor {self.current_monitor_index} fullscreen state to: {self.current_display_mode}")
+            
             if hasattr(self, 'status_log'):
                 self.status_log.append(f"[{time.strftime('%H:%M:%S')}] SENT: Toggle fullscreen command to {target_client} (now {self.current_display_mode})")
         else:
@@ -1254,9 +1482,25 @@ class ScoShowRemoteControlSuper(QMainWindow):
             QMessageBox.warning(self, "Error", "Failed to send command - MQTT not connected")
             
     def switch_monitor(self):
-        """Send switch monitor command"""
+        """Send switch monitor command with state preservation"""
         target_client = self.get_target_client()
         selected_monitor = self.monitor_spin.value()
+        
+        # Debug current state before switching
+        debug_print("🔄 BEFORE SWITCHING:")
+        self.debug_monitor_states()
+        
+        # Save current monitor state before switching
+        self.save_current_monitor_state()
+        
+        # Update current monitor index
+        old_monitor = self.current_monitor_index
+        self.current_monitor_index = selected_monitor
+        
+        debug_print(f"🔄 Switching from monitor {old_monitor} to monitor {selected_monitor}")
+        debug_print(f"💾 Saved state for monitor {old_monitor}: {self.monitor_states[old_monitor]}")
+        debug_print(f"🔍 Loading state for monitor {selected_monitor}: {self.monitor_states[selected_monitor]}")
+        
         data = {
             'action': 'switch_monitor',
             'monitor_index': selected_monitor
@@ -1264,6 +1508,10 @@ class ScoShowRemoteControlSuper(QMainWindow):
         
         if self.mqtt_handler.send_command('commands', data, target_client):
             debug_print(f"📤 Sent switch monitor command to target: {target_client}, monitor: {selected_monitor}")
+            
+            # Wait a moment for monitor switch to complete, then restore state
+            QTimer.singleShot(1000, self.restore_monitor_state)
+            
             if hasattr(self, 'status_log'):
                 self.status_log.append(f"[{time.strftime('%H:%M:%S')}] SENT: Switch to monitor {selected_monitor} on {target_client}")
         else:
@@ -1276,6 +1524,9 @@ class ScoShowRemoteControlSuper(QMainWindow):
         self.current_background = bg_id
         self.current_content_type = 'background'
         
+        # Update current monitor state
+        self.monitor_states[self.current_monitor_index]["background"] = bg_id
+        
         # Use "display" topic like in enhanced version
         data = {
             'action': 'show_background',
@@ -1285,11 +1536,63 @@ class ScoShowRemoteControlSuper(QMainWindow):
         # Send to display topic instead of commands
         if self.mqtt_handler.send_command('display', data, target_client):
             debug_print(f"📤 Sent show background command to target: {target_client}, bg_id: {bg_id}")
+            debug_print(f"💾 Updated monitor {self.current_monitor_index} background state to: {bg_id}")
             if hasattr(self, 'status_log'):
                 self.status_log.append(f"[{time.strftime('%H:%M:%S')}] SENT: Show background {bg_id} on {target_client}")
         else:
             debug_print(f"❌ Failed to send show background command: {bg_id}")
             QMessageBox.warning(self, "Error", "Failed to send command - MQTT not connected")
+    
+    def save_current_monitor_state(self):
+        """Save current monitor state before switching"""
+        current_state = self.monitor_states[self.current_monitor_index]
+        current_state["background"] = self.current_background
+        current_state["fullscreen"] = (self.current_display_mode == "fullscreen")
+        current_state["display_open"] = True  # Assume display is open if we're switching
+        
+        debug_print(f"💾 Saved state for monitor {self.current_monitor_index}: {current_state}")
+    
+    def restore_monitor_state(self):
+        """Restore state for the newly switched monitor"""
+        target_state = self.monitor_states[self.current_monitor_index]
+        target_client = self.get_target_client()
+        
+        debug_print(f"🔄 Restoring state for monitor {self.current_monitor_index}: {target_state}")
+        
+        # Restore background
+        if target_state["background"]:
+            debug_print(f"🖼️ Restoring background: {target_state['background']}")
+            self.show_background(target_state["background"])
+            
+            # Wait before applying fullscreen state
+            if target_state["fullscreen"]:
+                debug_print(f"🖥️ Restoring fullscreen mode")
+                QTimer.singleShot(1500, self.restore_fullscreen_state)
+            else:
+                debug_print(f"🪟 Keeping windowed mode")
+        
+        # Update UI to reflect current state
+        self.current_background = target_state["background"]
+        self.current_display_mode = "fullscreen" if target_state["fullscreen"] else "windowed"
+        
+        # Debug final state after switching
+        QTimer.singleShot(2000, lambda: (
+            debug_print("🔄 AFTER SWITCHING:"),
+            self.debug_monitor_states()
+        ))
+    
+    def restore_fullscreen_state(self):
+        """Restore fullscreen state after background is set"""
+        target_client = self.get_target_client()
+        data = {
+            'action': 'toggle_fullscreen'
+        }
+        
+        if self.mqtt_handler.send_command('commands', data, target_client):
+            debug_print(f"📤 Sent restore fullscreen command to target: {target_client}")
+            self.current_display_mode = "fullscreen"
+        else:
+            debug_print("❌ Failed to restore fullscreen state")
             
     def show_selected_background(self):
         """Show background selected from combo box"""
