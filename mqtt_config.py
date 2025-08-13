@@ -20,6 +20,7 @@ import random
 import string
 import os
 import json
+import platform
 
 def get_or_create_session_id():
     """Get fixed session ID for tournament ranking system"""
@@ -37,8 +38,19 @@ def get_or_create_session_id():
     
     return session_id
 
+# A simple client identifier to support targeted commands (defaults to hostname)
+def get_client_id():
+    try:
+        host = platform.node() or os.environ.get('COMPUTERNAME') or os.environ.get('HOSTNAME')
+        # Sanitize to safe characters
+        safe = ''.join(ch if ch.isalnum() or ch in ('-', '_') else '-' for ch in host)
+        return safe or 'client'
+    except Exception:
+        return 'client'
+
 # Get shared session ID
 UNIQUE_ID = get_or_create_session_id()
+CLIENT_ID = get_client_id()
 
 MQTT_TOPICS = {
     'commands': f'scoshow_{UNIQUE_ID}/commands',
@@ -49,6 +61,15 @@ MQTT_TOPICS = {
     'status': f'scoshow_{UNIQUE_ID}/status',
     'heartbeat': f'scoshow_{UNIQUE_ID}/heartbeat'
 }
+
+# Derived topics for targeted/broadcast commands (backward compatible with 'commands')
+MQTT_TOPICS['commands_targeted'] = f"{MQTT_TOPICS['commands']}/{CLIENT_ID}"
+MQTT_TOPICS['commands_broadcast'] = f"{MQTT_TOPICS['commands']}/all"
+
+# Targeted variants for other channels
+for key in ('ranking', 'final', 'display', 'background'):
+    MQTT_TOPICS[f'{key}_targeted'] = f"{MQTT_TOPICS[key]}/{CLIENT_ID}"
+    MQTT_TOPICS[f'{key}_broadcast'] = f"{MQTT_TOPICS[key]}/all"
 
 # QoS Level (0, 1, or 2)
 MQTT_QOS = 1

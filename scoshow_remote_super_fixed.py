@@ -8,7 +8,6 @@ import sys
 import json
 import time
 import os
-import re
 import logging
 from datetime import datetime
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
@@ -173,21 +172,15 @@ Round 1	555	CHWEE WAI ONN	21180
             debug_print(f"❌ Error processing data: {e}")
             
     def parse_data(self, raw_data):
-        """Parse the raw data into structured format with Round X validation"""
+        """Parse the raw data into structured format"""
         rows = raw_data.split('\n')
         parsed_data = []
         
-        # Filter out empty rows
+        # Skip header row if present
         data_rows = []
         for row in rows:
-            if row.strip():
+            if row.strip() and not row.strip().upper().startswith(('ROUND', 'MB', 'NAME')):
                 data_rows.append(row.strip())
-        
-        if not data_rows:
-            return parsed_data
-            
-        # Validate Round format and extract round number
-        round_number = None
         
         for row_index, row in enumerate(data_rows):
             if not row.strip():
@@ -195,48 +188,48 @@ Round 1	555	CHWEE WAI ONN	21180
                 
             # Try tab-separated first, then comma, then space
             columns = row.split('\t')
-            if len(columns) < 2:
+            if len(columns) < 3:
                 columns = row.split(',')
-            if len(columns) < 2:
+            if len(columns) < 3:
                 columns = row.split()
                 
-            if len(columns) >= 2:
+            if len(columns) >= 3:
                 try:
                     round_info = columns[0].strip()
-                    rank_value = columns[1].strip()
+                    mb_number = columns[1].strip()
+                    name = columns[2].strip()
                     
-                    # Extract and validate round number from "Round X" format
+                    # Extract round number from "Round X" format
                     import re
-                    round_match = re.search(r'round\s+(\d+)', round_info.lower())
-                    if not round_match:
-                        debug_print(f"❌ Invalid round format in row {row_index + 1}: '{round_info}' (expected 'Round X')")
-                        return []
+                    round_num = 1
+                    if 'round' in round_info.lower():
+                        round_match = re.search(r'round\s*(\d+)', round_info.lower())
+                        if round_match:
+                            round_num = int(round_match.group(1))
                     
-                    current_round = int(round_match.group(1))
-                    
-                    # Validate that all rows have the same round number
-                    if round_number is None:
-                        round_number = current_round
-                    elif round_number != current_round:
-                        debug_print(f"❌ Inconsistent round number in row {row_index + 1}: found 'Round {current_round}', expected 'Round {round_number}'")
-                        return []
-                    
-                    # Position is based on order (1st, 2nd, 3rd, etc.)
+                    # Use row index + 1 as position (rank)
                     position = row_index + 1
                     
+                    # Extract just the number from mb_number
+                    mb_clean = mb_number
+                    if mb_number:
+                        number_match = re.search(r'^\d+', mb_number)
+                        if number_match:
+                            mb_clean = number_match.group(0)
+                    
                     data_row = {
-                        'round': round_number,
+                        'round': round_num,
                         'position': position,
-                        'name': rank_value,  # The rank value goes into name field
-                        'rank': f"{position}{'st' if position == 1 else 'nd' if position == 2 else 'rd' if position == 3 else 'th'}"
+                        'mb': mb_clean,
+                        'name': name,
+                        'credit': columns[3].strip() if len(columns) > 3 else '',
+                        'last_bet': columns[4].strip() if len(columns) > 4 else ''
                     }
                     parsed_data.append(data_row)
-                    
                 except (ValueError, IndexError) as e:
-                    debug_print(f"❌ Error parsing row {row_index + 1}: {e}")
-                    return []
+                    debug_print(f"Error parsing row {row_index + 1}: {e}")
+                    continue
                 
-        debug_print(f"✅ Successfully parsed {len(parsed_data)} rows for Round {round_number}")
         return parsed_data
 
 class MQTTRemoteHandler(QObject):
@@ -246,7 +239,6 @@ class MQTTRemoteHandler(QObject):
     status_received = pyqtSignal(dict)
     heartbeat_received = pyqtSignal(dict)
     connection_changed = pyqtSignal(bool)
-    debug_message = pyqtSignal(str)
     
     def __init__(self):
         super().__init__()
@@ -326,10 +318,6 @@ class MQTTRemoteHandler(QObject):
             payload = json.loads(msg.payload.decode())
             debug_print(f"📨 Message received on {topic}: {payload}")
             
-            # Emit debug message to be displayed in the UI
-            debug_msg = f"📨 Received on {topic}: {json.dumps(payload, indent=2, ensure_ascii=False)}"
-            self.debug_message.emit(debug_msg)
-            
             if topic == MQTT_TOPICS['status']:
                 self.status_received.emit(payload)
             elif topic == MQTT_TOPICS['heartbeat']:
@@ -337,51 +325,46 @@ class MQTTRemoteHandler(QObject):
                 
         except Exception as e:
             debug_print(f"❌ Error processing MQTT message: {e}")
-            # Emit error message to be displayed in the UI
-            self.debug_message.emit(f"❌ Error: {e}")
             
-    def send_command(self, command_type, data=None, target_client=None):
-        """Send command via MQTT with optional targeting"""
+    def send_command(self, command_type, data=None):
+        """Send command via MQTT"""
         if not self.connected:
             debug_print("❌ Cannot send command: Not connected to MQTT broker")
             return False
-        
-        # Determine target and topic
-        if target_client and target_client != "all":
-            # Use targeted topic for specific client
-            base_topic = MQTT_TOPICS.get(command_type, MQTT_TOPICS['commands'])
-            topic = f"{base_topic}/{target_client}"
-            debug_print(f"🎯 Sending TARGETED command to client: {target_client}")
-        else:
-            # Use broadcast topic for all clients
-            topic = MQTT_TOPICS.get(command_type, MQTT_TOPICS['commands'])
-            debug_print(f"📢 Sending BROADCAST command to all clients")
-        
-        # Ensure data is a dict and add target field
-        if data is None:
-            data = {}
-        if not isinstance(data, dict):
-            data = {'message': data}
-        
-        # Add target field to data payload
-        data['target'] = target_client if target_client else "all"
-        
-        message = json.dumps(data, ensure_ascii=False)
-        
-        try:
-            debug_print(f"📤 SENDING COMMAND TO CLIENT")
-            debug_print(f"   Command Type: {command_type}")
-            debug_print(f"   Target: {data.get('target', 'all')}")
-            debug_print(f"   Topic: {topic}")
-            debug_print(f"   Data: {json.dumps(data, indent=2, ensure_ascii=False)}")
             
-            result = self.client.publish(topic, message, MQTT_QOS)
+        try:
+            # Use different topic based on command type
+            if command_type in ['ranking', 'final']:
+                topic = MQTT_TOPICS.get(command_type, MQTT_TOPICS['commands'])
+            else:
+                topic = MQTT_TOPICS['commands']
+                
+            # Prepare data based on enhanced version format
+            if command_type == 'ranking':
+                message = json.dumps(data, ensure_ascii=False)
+            elif command_type == 'final':
+                message = json.dumps(data, ensure_ascii=False)  
+            else:
+                payload = {
+                    'action': command_type,
+                    'data': data or {},
+                    'timestamp': datetime.now().isoformat(),
+                    'session_id': UNIQUE_ID
+                }
+                message = json.dumps(payload)
+            
+            debug_print(f"📤 Sending command '{command_type}' to topic '{topic}'")
+            debug_print(f"📦 Payload: {message}")
+            
+            result = self.client.publish(topic, message, qos=MQTT_QOS)
+            
             if result.rc == mqtt.MQTT_ERR_SUCCESS:
-                debug_print(f"✅ Command sent successfully!")
+                debug_print(f"✅ Command '{command_type}' sent successfully")
                 return True
             else:
-                debug_print(f"❌ Failed to send command, RC: {result.rc}")
+                debug_print(f"❌ Failed to send command '{command_type}', error code: {result.rc}")
                 return False
+                
         except Exception as e:
             debug_print(f"❌ Error sending command: {e}")
             return False
@@ -445,45 +428,6 @@ class ScoShowRemoteControlSuper(QMainWindow):
         self.available_monitors = ["Monitor 1 (Primary)", "Monitor 2", "Monitor 3", "Monitor 4"]
         debug_print("🖥️ Using default monitor list")
         
-    def update_monitors_from_client(self, monitor_info):
-        """Update monitor information received from client"""
-        try:
-            if monitor_info and isinstance(monitor_info, list):
-                debug_print(f"🖥️ Updating monitors from client: {monitor_info}")
-                
-                # Store the monitor info
-                self.available_monitors = monitor_info
-                
-                # Update both combo boxes
-                if hasattr(self, 'monitor_combo'):
-                    current_index = self.monitor_combo.currentIndex()
-                    self.monitor_combo.clear()
-                    for monitor_name in monitor_info:
-                        self.monitor_combo.addItem(monitor_name)
-                    
-                    # Restore selection if valid
-                    if current_index < len(monitor_info):
-                        self.monitor_combo.setCurrentIndex(current_index)
-                    
-                if hasattr(self, 'monitor_settings_combo'):
-                    current_index = self.monitor_settings_combo.currentIndex()
-                    self.monitor_settings_combo.clear()
-                    for monitor_name in monitor_info:
-                        self.monitor_settings_combo.addItem(monitor_name)
-                    
-                    # Restore selection if valid
-                    if current_index < len(monitor_info):
-                        self.monitor_settings_combo.setCurrentIndex(current_index)
-                
-                # Update spin box range
-                if hasattr(self, 'monitor_spin'):
-                    self.monitor_spin.setRange(0, len(monitor_info) - 1)
-                
-                debug_print(f"✅ Monitor list updated with {len(monitor_info)} monitors")
-                
-        except Exception as e:
-            debug_print(f"❌ Error updating monitors from client: {e}")
-        
     def init_ui(self):
         """Initialize the user interface"""
         self.setWindowTitle("🎪 ScoShow Remote Control - Super Enhanced")
@@ -534,34 +478,12 @@ class ScoShowRemoteControlSuper(QMainWindow):
         
         status_layout.addStretch()
         
-        # Target Client Selection
-        status_layout.addWidget(QLabel("🎯 Target:"))
-        self.target_client_combo = QComboBox()
-        self.target_client_combo.addItem("📢 All Clients (Broadcast)")
-        self.target_client_combo.addItem("🖥️ This Computer Only")
-        self.target_client_combo.setCurrentIndex(1)  # Default to "This Computer Only"
-        self.target_client_combo.setToolTip("Select which client(s) to send commands to")
-        status_layout.addWidget(self.target_client_combo)
-        
         # Reconnect button
         reconnect_btn = QPushButton("🔄 Reconnect")
         reconnect_btn.clicked.connect(self.reconnect_mqtt)
         status_layout.addWidget(reconnect_btn)
         
         main_layout.addWidget(status_frame)
-        
-    def get_target_client(self):
-        """Get the currently selected target client"""
-        if hasattr(self, 'target_client_combo'):
-            selected_index = self.target_client_combo.currentIndex()
-            if selected_index == 0:  # "All Clients (Broadcast)"
-                return "all"
-            elif selected_index == 1:  # "This Computer Only"
-                return CLIENT_ID  # Use the client ID from mqtt_config
-            else:
-                # Custom client selection (if we add more options later)
-                return "all"
-        return CLIENT_ID  # Default to this computer only
         
     def create_display_tab(self):
         """Create display control tab"""
@@ -599,16 +521,6 @@ class ScoShowRemoteControlSuper(QMainWindow):
         bg_browse_btn.clicked.connect(self.browse_background_folder)
         setup_layout.addWidget(bg_browse_btn, 1, 2)
         
-        # Background file selection
-        setup_layout.addWidget(QLabel("Background File:"), 2, 0)
-        self.bg_file_combo = QComboBox()
-        self.bg_file_combo.addItems(["00.jpg (Wait)", "01.png (Ranking)", "02.png (Final)"])
-        setup_layout.addWidget(self.bg_file_combo, 2, 1)
-        
-        load_bg_btn = QPushButton("🔄 Load List")
-        load_bg_btn.clicked.connect(self.load_background_list)
-        setup_layout.addWidget(load_bg_btn, 2, 2)
-        
         layout.addWidget(setup_group)
         
         # Display Controls
@@ -635,37 +547,19 @@ class ScoShowRemoteControlSuper(QMainWindow):
         
         # Background Selection
         bg_group = QGroupBox("🖼️ Background Selection")
-        bg_layout = QVBoxLayout(bg_group)
-        
-        # Quick selection buttons
-        quick_layout = QHBoxLayout()
+        bg_layout = QHBoxLayout(bg_group)
         
         bg00_btn = QPushButton("⏸️ Wait (00)")
         bg00_btn.clicked.connect(lambda: self.show_background("00"))
-        quick_layout.addWidget(bg00_btn)
+        bg_layout.addWidget(bg00_btn)
         
         bg01_btn = QPushButton("📊 Ranking (01)")
         bg01_btn.clicked.connect(lambda: self.show_background("01"))
-        quick_layout.addWidget(bg01_btn)
+        bg_layout.addWidget(bg01_btn)
         
         bg02_btn = QPushButton("🏆 Final (02)")
         bg02_btn.clicked.connect(lambda: self.show_background("02"))
-        quick_layout.addWidget(bg02_btn)
-        
-        bg_layout.addLayout(quick_layout)
-        
-        # Custom selection
-        custom_layout = QHBoxLayout()
-        
-        show_selected_btn = QPushButton("🖼️ Show Selected")
-        show_selected_btn.clicked.connect(self.show_selected_background)
-        custom_layout.addWidget(show_selected_btn)
-        
-        hide_bg_btn = QPushButton("🙈 Hide Background")
-        hide_bg_btn.clicked.connect(self.hide_background)
-        custom_layout.addWidget(hide_bg_btn)
-        
-        bg_layout.addLayout(custom_layout)
+        bg_layout.addWidget(bg02_btn)
         
         layout.addWidget(bg_group)
         
@@ -967,15 +861,19 @@ class ScoShowRemoteControlSuper(QMainWindow):
             self.round_edit.setText(f"Round {parsed_data[0]['round']}")
             
         if tab_type == "rank":
-            # Update ranking fields with new data structure
+            # Update ranking fields
             positions = ["1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th", "9th", "10th"]
             for i, row in enumerate(parsed_data[:10]):  # Only take first 10 for ranking
                 if i < len(positions):
                     pos = positions[i]
                     if pos in self.rank_edits:
-                        name = row.get('name', '')  # This is the rank value from column 2
-                        self.rank_edits[pos].setText(name)
-                        debug_print(f"✅ Updated {pos}: {name}")
+                        name = row.get('name', '')
+                        mb = row.get('mb', '')
+                        if mb:
+                            display_text = f"MB {mb} - {name}"
+                        else:
+                            display_text = name
+                        self.rank_edits[pos].setText(display_text)
                         
         elif tab_type == "final":
             # Update final results fields
@@ -985,8 +883,12 @@ class ScoShowRemoteControlSuper(QMainWindow):
                     key = final_keys[i]
                     if key in self.final_edits:
                         name = row.get('name', '')
-                        self.final_edits[key].setText(name)
-                        debug_print(f"✅ Updated {key}: {name}")
+                        mb = row.get('mb', '')
+                        if mb:
+                            display_text = f"MB {mb} - {name}"
+                        else:
+                            display_text = name
+                        self.final_edits[key].setText(display_text)
                         
         debug_print(f"✅ Fields updated successfully for {tab_type}")
         
@@ -999,17 +901,12 @@ class ScoShowRemoteControlSuper(QMainWindow):
         self.mqtt_handler.connection_changed.connect(self.handle_connection_changed)
         self.mqtt_handler.status_received.connect(self.handle_status_received)
         self.mqtt_handler.heartbeat_received.connect(self.handle_heartbeat_received)
-        self.mqtt_handler.debug_message.connect(self.handle_debug_message)
         
         # Connect to broker
         if self.mqtt_handler.connect():
             debug_print("✅ MQTT connection initiated")
         else:
             debug_print("❌ Failed to initiate MQTT connection")
-            
-    def handle_debug_message(self, message):
-        """Handle debug message from MQTT handler"""
-        self.debug_text.append(message)
             
     def handle_connection_changed(self, connected):
         """Handle MQTT connection status change"""
@@ -1027,72 +924,9 @@ class ScoShowRemoteControlSuper(QMainWindow):
         debug_print(f"📊 Status received: {data}")
         self.last_update.setText(f"📅 Last: {datetime.now().strftime('%H:%M:%S')}")
         
-        status = data.get('status', 'unknown')
-        message = data.get('message', '')
-        timestamp = data.get('timestamp', time.time())
-        
-        debug_print("🎯 CLIENT STATUS UPDATE RECEIVED:")
-        debug_print(f"   Status: {status}")
-        debug_print(f"   Message: {message}")
-        debug_print(f"   Timestamp: {timestamp}")
-        debug_print(f"   Time: {time.strftime('%H:%M:%S', time.localtime(timestamp))}")
-        
-        # Add status info to debug text
-        status_msg = f"🎯 STATUS: {status} - {message} ({time.strftime('%H:%M:%S', time.localtime(timestamp))})"
-        self.debug_text.append(status_msg)
-        
-        # Check for additional data in status
-        if 'display_info' in data:
-            debug_print(f"   Display Info: {data['display_info']}")
-            self.debug_text.append(f"   Display Info: {data['display_info']}")
-        if 'monitor_info' in data:
-            debug_print(f"   Monitor Info: {data['monitor_info']}")
-            self.debug_text.append(f"   Monitor Info: {data['monitor_info']}")
-            # Update monitor info when received
-            self.update_monitors_from_client(data['monitor_info'])
-        if 'background_folder' in data:
-            debug_print(f"   Background Folder: {data['background_folder']}")
-            self.debug_text.append(f"   Background Folder: {data['background_folder']}")
-        if 'error_details' in data:
-            debug_print(f"   Error: {data['error_details']}")
-            self.debug_text.append(f"   ❌ Error: {data['error_details']}")
-        if 'command_result' in data:
-            debug_print(f"   Command Result: {data['command_result']}")
-        
-        # Update client status
-        if status == 'online':
-            debug_print("✅ Client is ONLINE and ready!")
-            self.client_status.setText("🟢 Client: Online")
-            self.client_status.setStyleSheet("font-weight: bold; color: green;")
-        elif status == 'error':
-            debug_print("❌ Client reported an ERROR!")
-            self.client_status.setText("🔴 Client: Error")
-            self.client_status.setStyleSheet("font-weight: bold; color: red;")
-        else:
-            debug_print(f"ℹ️ Client status: {status}")
-            self.client_status.setText(f"🔵 Client: {status.title()}")
-            self.client_status.setStyleSheet("font-weight: bold; color: blue;")
-            
-        # Add detailed status to debug text
-        status_text = f"[{datetime.now().strftime('%H:%M:%S')}] Status: {status}"
-        if message:
-            status_text += f" - {message}"
-        
-        # Add extra details for client info responses
-        if 'display_info' in data:
-            status_text += f"\nDisplay Info: {data['display_info']}"
-        if 'monitor_info' in data:
-            status_text += f"\nMonitor Info: {data['monitor_info']}"
-        if 'background_folder' in data:
-            status_text += f"\nBackground Folder: {data['background_folder']}"
-        if 'error_details' in data:
-            status_text += f"\nError: {data['error_details']}"
-        if 'command_result' in data:
-            status_text += f"\nCommand Result: {data['command_result']}"
-            
-        status_text += "\n"
-        if hasattr(self, 'debug_text'):
-            self.debug_text.append(status_text)
+        # Update debug text
+        status_text = f"[{datetime.now().strftime('%H:%M:%S')}] Status: {data}\n"
+        self.debug_text.append(status_text)
         
     def handle_heartbeat_received(self, data):
         """Handle heartbeat from client"""
@@ -1100,45 +934,7 @@ class ScoShowRemoteControlSuper(QMainWindow):
         self.client_online = True
         self.client_status.setText("🟢 Client: Online")
         self.client_status.setStyleSheet("font-weight: bold; color: green;")
-        
-        timestamp = data.get('timestamp', time.time())
-        time_str = time.strftime("%H:%M:%S", time.localtime(timestamp))
-        
-        debug_print("💓 CLIENT HEARTBEAT RECEIVED:")
-        debug_print(f"   Timestamp: {timestamp}")
-        debug_print(f"   Time: {time_str}")
-        
-        # Extract and display detailed heartbeat info
-        if 'display_status' in data:
-            debug_print(f"   Display Status: {data['display_status']}")
-        if 'current_background' in data:
-            debug_print(f"   Current Background: {data['current_background']}")
-        if 'system_info' in data:
-            sys_info = data['system_info']
-            debug_print(f"   System Info:")
-            for key, value in sys_info.items():
-                debug_print(f"     - {key}: {value}")
-        if 'client_version' in data:
-            debug_print(f"   Client Version: {data['client_version']}")
-        if 'uptime' in data:
-            debug_print(f"   Client Uptime: {data['uptime']} seconds")
-        if 'monitor_info' in data:
-            debug_print(f"   Monitor Info: {data['monitor_info']}")
-            # Update monitors from client heartbeat
-            self.update_monitors_from_client(data['monitor_info'])
-        
-        debug_print("💓 Heartbeat processed successfully")
-            
-        # Update debug text with detailed heartbeat info
-        heartbeat_msg = f"💓 HEARTBEAT ({time_str}): "
-        if 'display_status' in data:
-            heartbeat_msg += f"Display: {data['display_status']}, "
-        if 'current_background' in data:
-            heartbeat_msg += f"Background: {data['current_background']}, "
-        if 'client_version' in data:
-            heartbeat_msg += f"Version: {data['client_version']}"
-        
-        self.debug_text.append(heartbeat_msg)
+        debug_print("💓 Heartbeat received from client")
         
     def check_client_status(self):
         """Check if client is still online based on heartbeat"""
@@ -1157,182 +953,73 @@ class ScoShowRemoteControlSuper(QMainWindow):
             self.bg_folder_edit.setText(folder)
             debug_print(f"📁 Background folder selected: {folder}")
             
-            # Send background folder to client
-            target_client = self.get_target_client()
-            data = {
-                'action': 'set_background_folder',
-                'background_folder': folder
-            }
-            
-            if self.mqtt_handler.send_command('set_background_folder', data, target_client):
-                debug_print(f"📤 Sent background folder to target: {target_client}, folder: {folder}")
-            else:
-                debug_print(f"❌ Failed to send background folder to client")
-                
-    def load_background_list(self):
-        """Load background files from selected folder"""
-        folder = self.bg_folder_edit.text()
-        if not folder or not os.path.exists(folder):
-            QMessageBox.warning(self, "Warning", "Please select a valid background folder first!")
-            return
-            
-        try:
-            self.bg_file_combo.clear()
-            
-            # Add default options
-            self.bg_file_combo.addItem("00.jpg (Wait)")
-            self.bg_file_combo.addItem("01.png (Ranking)")
-            self.bg_file_combo.addItem("02.png (Final)")
-            
-            # Scan folder for image files
-            image_extensions = ['.jpg', '.jpeg', '.png', '.bmp', '.gif']
-            files = []
-            
-            for file in os.listdir(folder):
-                if any(file.lower().endswith(ext) for ext in image_extensions):
-                    files.append(file)
-                    
-            # Sort files
-            files.sort()
-            
-            # Add custom files if any
-            for file in files:
-                if not file.startswith(('00.', '01.', '02.')):
-                    self.bg_file_combo.addItem(f"{file}")
-                    
-            debug_print(f"📂 Loaded {len(files)} background files from: {folder}")
-            
-        except Exception as e:
-            debug_print(f"❌ Error loading background list: {e}")
-            QMessageBox.critical(self, "Error", f"Failed to load background list:\n{e}")
-            
     def open_display(self):
         """Send open display command"""
-        target_client = self.get_target_client()
         data = {
             'action': 'open_display',
             'monitor_index': self.monitor_spin.value(),
             'background_folder': self.bg_folder_edit.text()
         }
         
-        if self.mqtt_handler.send_command('commands', data, target_client):
-            debug_print(f"📤 Sent open display command to target: {target_client}")
-            if hasattr(self, 'status_log'):
-                self.status_log.append(f"[{time.strftime('%H:%M:%S')}] SENT: Open display command to {target_client}")
-            # Tự động hiển thị WAIT(00) sau khi mở display
-            QTimer.singleShot(1000, lambda: self.show_background("00"))
+        if self.mqtt_handler.send_command('open_display', data):
+            debug_print("📤 Sent open display command")
         else:
             debug_print("❌ Failed to send open display command")
-            QMessageBox.warning(self, "Error", "Failed to send command - MQTT not connected")
             
     def close_display(self):
         """Send close display command"""
-        target_client = self.get_target_client()
         data = {'action': 'close_display'}
         
-        if self.mqtt_handler.send_command('commands', data, target_client):
-            debug_print(f"📤 Sent close display command to target: {target_client}")
-            if hasattr(self, 'status_log'):
-                self.status_log.append(f"[{time.strftime('%H:%M:%S')}] SENT: Close display command to {target_client}")
+        if self.mqtt_handler.send_command('close_display', data):
+            debug_print("📤 Sent close display command")
         else:
             debug_print("❌ Failed to send close display command")
-            QMessageBox.warning(self, "Error", "Failed to send command - MQTT not connected")
             
     def toggle_fullscreen(self):
         """Send toggle fullscreen command"""
-        target_client = self.get_target_client()
         data = {'action': 'toggle_fullscreen'}
         
-        if self.mqtt_handler.send_command('commands', data, target_client):
-            # Chuyển đổi trạng thái hiển thị
-            self.current_display_mode = 'fullscreen' if self.current_display_mode == 'windowed' else 'windowed'
-            debug_print(f"📤 Sent toggle fullscreen command to target: {target_client}")
-            if hasattr(self, 'status_log'):
-                self.status_log.append(f"[{time.strftime('%H:%M:%S')}] SENT: Toggle fullscreen command to {target_client} (now {self.current_display_mode})")
+        if self.mqtt_handler.send_command('toggle_fullscreen', data):
+            debug_print("📤 Sent toggle fullscreen command")
         else:
             debug_print("❌ Failed to send toggle fullscreen command")
-            QMessageBox.warning(self, "Error", "Failed to send command - MQTT not connected")
             
     def switch_monitor(self):
         """Send switch monitor command"""
-        target_client = self.get_target_client()
-        selected_monitor = self.monitor_spin.value()
         data = {
             'action': 'switch_monitor',
-            'monitor_index': selected_monitor
+            'monitor_index': self.monitor_spin.value(),
+            'maintain_content': True
         }
         
-        if self.mqtt_handler.send_command('commands', data, target_client):
-            debug_print(f"📤 Sent switch monitor command to target: {target_client}, monitor: {selected_monitor}")
-            if hasattr(self, 'status_log'):
-                self.status_log.append(f"[{time.strftime('%H:%M:%S')}] SENT: Switch to monitor {selected_monitor} on {target_client}")
+        if self.mqtt_handler.send_command('switch_monitor', data):
+            debug_print(f"📤 Sent switch monitor command: {self.monitor_spin.value()}")
         else:
             debug_print("❌ Failed to send switch monitor command")
-            QMessageBox.warning(self, "Error", "Failed to send command - MQTT not connected")
             
     def show_background(self, bg_id):
         """Send show background command"""
-        target_client = self.get_target_client()
         self.current_background = bg_id
         self.current_content_type = 'background'
         
-        # Use "display" topic like in enhanced version
         data = {
             'action': 'show_background',
             'background_id': bg_id
         }
         
-        # Send to display topic instead of commands
-        if self.mqtt_handler.send_command('display', data, target_client):
-            debug_print(f"📤 Sent show background command to target: {target_client}, bg_id: {bg_id}")
-            if hasattr(self, 'status_log'):
-                self.status_log.append(f"[{time.strftime('%H:%M:%S')}] SENT: Show background {bg_id} on {target_client}")
+        if self.mqtt_handler.send_command('show_background', data):
+            debug_print(f"📤 Sent show background command: {bg_id}")
         else:
             debug_print(f"❌ Failed to send show background command: {bg_id}")
-            QMessageBox.warning(self, "Error", "Failed to send command - MQTT not connected")
-            
-    def show_selected_background(self):
-        """Show background selected from combo box"""
-        selected_text = self.bg_file_combo.currentText()
-        if not selected_text:
-            return
-            
-        # Extract background ID from combo box text
-        if "00." in selected_text or "(Wait)" in selected_text:
-            bg_id = "00"
-        elif "01." in selected_text or "(Ranking)" in selected_text:
-            bg_id = "01"
-        elif "02." in selected_text or "(Final)" in selected_text:
-            bg_id = "02"
-        else:
-            # Custom background file
-            bg_id = selected_text.split()[0]  # Get filename part
-            
-        self.show_background(bg_id)
-        
-    def hide_background(self):
-        """Hide background"""
-        target_client = self.get_target_client()
-        data = {
-            'action': 'hide_background'
-        }
-        
-        if self.mqtt_handler.send_command('hide_background', data, target_client):
-            debug_print(f"📤 Sent hide background command to target: {target_client}")
-        else:
-            debug_print("❌ Failed to send hide background command")
             
     def apply_ranking(self):
         """Apply ranking data"""
         # Collect ranking data
         overlay_data = {'round': self.round_edit.text()}
         
-        # Count actual ranks with data
-        rank_count = 0
         for rank in self.rank_edits:
-            if self.rank_edits[rank].text().strip():
-                overlay_data[rank] = self.rank_edits[rank].text().strip()
-                rank_count += 1
+            if self.rank_edits[rank].text():
+                overlay_data[rank] = self.rank_edits[rank].text()
         
         # Collect positions
         positions = {}
@@ -1356,16 +1043,8 @@ class ScoShowRemoteControlSuper(QMainWindow):
         }
         overlay_data['font_settings'] = font_settings
         
-        debug_print(f"📤 Sending ranking data:")
-        debug_print(f"   Round: {overlay_data.get('round', '')}")
-        debug_print(f"   Ranks with data: {rank_count}")
-        for rank in ['1st', '2nd', '3rd', '4th', '5th']:
-            if rank in overlay_data:
-                debug_print(f"   {rank}: {overlay_data[rank]}")
-        
-        target_client = self.get_target_client()
-        if self.mqtt_handler.send_command('ranking', overlay_data, target_client):
-            debug_print(f"✅ Sent ranking update with {rank_count} ranks to target: {target_client}")
+        if self.mqtt_handler.send_command('ranking', overlay_data):
+            debug_print(f"📤 Sent ranking update with {len([k for k in overlay_data if k not in ['positions', 'font_settings', 'round']])} ranks")
         else:
             debug_print("❌ Failed to send ranking update")
             
@@ -1393,39 +1072,28 @@ class ScoShowRemoteControlSuper(QMainWindow):
         }
         overlay_data['font_settings'] = font_settings
         
-        target_client = self.get_target_client()
-        if self.mqtt_handler.send_command('final', overlay_data, target_client):
-            debug_print(f"📤 Sent final results with {len([k for k in overlay_data if k not in ['positions', 'font_settings']])} positions to target: {target_client}")
+        if self.mqtt_handler.send_command('final', overlay_data):
+            debug_print(f"📤 Sent final results with {len([k for k in overlay_data if k not in ['positions', 'font_settings']])} positions")
         else:
             debug_print("❌ Failed to send final results")
             
     def request_client_info(self):
         """Request client information"""
-        target_client = self.get_target_client()
         data = {'action': 'request_info'}
-        if self.mqtt_handler.send_command('commands', data, target_client):
-            debug_print(f"📤 Sent client info request to target: {target_client}")
-            if hasattr(self, 'status_log'):
-                self.status_log.append(f"[{time.strftime('%H:%M:%S')}] SENT: Client info request to {target_client}")
+        if self.mqtt_handler.send_command('request_info', data):
+            debug_print("📤 Sent client info request")
         else:
             debug_print("❌ Failed to send client info request")
-            QMessageBox.warning(self, "Error", "Failed to send command - MQTT not connected")
             
     def test_connection(self):
         """Test MQTT connection"""
-        target_client = self.get_target_client()
         data = {'action': 'test_connection', 'timestamp': datetime.now().isoformat()}
-        if self.mqtt_handler.send_command('commands', data, target_client):
-            debug_print(f"📤 Sent test connection command to target: {target_client}")
-            if hasattr(self, 'debug_text'):
-                self.debug_text.append(f"[{datetime.now().strftime('%H:%M:%S')}] Test connection sent to {target_client}")
-            if hasattr(self, 'status_log'):
-                self.status_log.append(f"[{time.strftime('%H:%M:%S')}] SENT: Test connection to {target_client}")
+        if self.mqtt_handler.send_command('test_connection', data):
+            debug_print("📤 Sent test connection command")
+            self.debug_text.append(f"[{datetime.now().strftime('%H:%M:%S')}] Test connection sent\n")
         else:
             debug_print("❌ Failed to send test connection")
-            if hasattr(self, 'debug_text'):
-                self.debug_text.append(f"[{datetime.now().strftime('%H:%M:%S')}] Test connection failed")
-            QMessageBox.warning(self, "Error", "Failed to send command - MQTT not connected")
+            self.debug_text.append(f"[{datetime.now().strftime('%H:%M:%S')}] Test connection failed\n")
             
     def reconnect_mqtt(self):
         """Reconnect to MQTT broker"""

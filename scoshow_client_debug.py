@@ -13,6 +13,7 @@ import logging
 from datetime import datetime
 from PyQt5.QtWidgets import QApplication, QMainWindow, QSystemTrayIcon, QMenu, QAction, QMessageBox, QFileDialog, QPushButton, QVBoxLayout, QWidget
 from PyQt5.QtCore import QTimer, pyqtSignal, QObject
+from PyQt5.QtNetwork import QLocalServer, QLocalSocket
 from PyQt5.QtGui import QIcon
 import paho.mqtt.client as mqtt
 from main import TournamentDisplayWindow
@@ -35,6 +36,36 @@ def debug_print(message):
     logger.info(message)
     if sys.stdout:  # Check if stdout exists before flushing
         sys.stdout.flush()  # Force immediate output
+
+# --- Single instance guard helpers ---
+def ensure_single_instance(instance_key: str):
+    """Ensure only one instance of this app runs.
+    Returns a QLocalServer if this is the primary instance, otherwise None.
+    """
+    # Try to connect to an existing server
+    socket = QLocalSocket()
+    socket.connectToServer(instance_key)
+    if socket.waitForConnected(150):
+        # Another instance is running
+        socket.close()
+        return None
+
+    # No instance is running (or stale server). Create a new server.
+    server = QLocalServer()
+    # Handle potential stale server names
+    try:
+        QLocalServer.removeServer(instance_key)
+    except Exception:
+        pass
+    if not server.listen(instance_key):
+        # As a last resort, try removing and listening again
+        try:
+            QLocalServer.removeServer(instance_key)
+        except Exception:
+            pass
+        if not server.listen(instance_key):
+            return None
+    return server
 
 class MQTTHandler(QObject):
     """Handle MQTT communication"""
@@ -103,10 +134,21 @@ class MQTTHandler(QObject):
             
             # Subscribe to all relevant topics
             debug_print("📥 Subscribing to MQTT topics...")
-            for topic_name, topic in MQTT_TOPICS.items():
-                if topic_name != 'status':  # Don't subscribe to status (we publish to it)
-                    client.subscribe(topic, MQTT_QOS)
-                    debug_print(f"   ✓ Subscribed to {topic}")
+            # Subscribe base topics and their targeted/broadcast variants
+            for key, base in MQTT_TOPICS.items():
+                if key == 'status':
+                    continue
+                client.subscribe(base, MQTT_QOS)
+                debug_print(f"   ✓ Subscribed to {base}")
+            for base_key in ('commands', 'ranking', 'final', 'display', 'background'):
+                t_key = f"{base_key}_targeted"
+                b_key = f"{base_key}_broadcast"
+                if t_key in MQTT_TOPICS:
+                    client.subscribe(MQTT_TOPICS[t_key], MQTT_QOS)
+                    debug_print(f"   ✓ Subscribed to {MQTT_TOPICS[t_key]}")
+                if b_key in MQTT_TOPICS:
+                    client.subscribe(MQTT_TOPICS[b_key], MQTT_QOS)
+                    debug_print(f"   ✓ Subscribed to {MQTT_TOPICS[b_key]}")
                     
             # Send initial status
             debug_print("📤 Sending initial status...")
@@ -151,18 +193,51 @@ class MQTTHandler(QObject):
         try:
             topic = msg.topic
             payload = json.loads(msg.payload.decode())
+            
+            # If a target is specified, ensure it matches this client (or is broadcast)
+            target = payload.get('target') if isinstance(payload, dict) else None
+            if target and target not in (CLIENT_ID, 'all'):
+                debug_print(f"🎯 Ignoring message for target '{target}' (this client: '{CLIENT_ID}')")
+                return
+            
+            # Generate message ID for deduplication
+            import hashlib
+            message_content = str(payload) + str(topic)
+            message_id = hashlib.md5(message_content.encode()).hexdigest()
+            
+            # Check if we've already processed this message recently
+            current_time = time.time()
+            topic_key = topic.split('/')[-1]  # Get the last part of topic
+            
+            if not hasattr(self, '_last_message_id'):
+                self._last_message_id = {}
+            
+            if topic_key in self._last_message_id:
+                last_id, last_time = self._last_message_id[topic_key]
+                # If same message within 1 second, skip it
+                if last_id == message_id and (current_time - last_time) < 1:
+                    debug_print(f"⚠️ Skipping duplicate message for {topic_key}")
+                    return
+            
+            # Update last message tracking
+            self._last_message_id[topic_key] = (message_id, current_time)
+            
             debug_print(f"📨 Received message on {topic}: {payload}")
             
             # Emit signal with command type and data
-            if topic == MQTT_TOPICS['commands']:
+            # Normalize command topics (support base, targeted, and broadcast)
+            base_commands = MQTT_TOPICS['commands']
+            targeted = MQTT_TOPICS.get('commands_targeted')
+            broadcast = MQTT_TOPICS.get('commands_broadcast')
+            if topic in (base_commands, targeted, broadcast):
                 self.command_received.emit('command', payload)
-            elif topic == MQTT_TOPICS['ranking']:
+            elif topic in (MQTT_TOPICS['ranking'], MQTT_TOPICS.get('ranking_targeted'), MQTT_TOPICS.get('ranking_broadcast')):
                 self.command_received.emit('ranking', payload)
-            elif topic == MQTT_TOPICS['final']:
+            elif topic in (MQTT_TOPICS['final'], MQTT_TOPICS.get('final_targeted'), MQTT_TOPICS.get('final_broadcast')):
                 self.command_received.emit('final', payload)
-            elif topic == MQTT_TOPICS['display']:
+            elif topic in (MQTT_TOPICS['display'], MQTT_TOPICS.get('display_targeted'), MQTT_TOPICS.get('display_broadcast')):
                 self.command_received.emit('display', payload)
-            elif topic == MQTT_TOPICS['background']:
+            elif topic in (MQTT_TOPICS['background'], MQTT_TOPICS.get('background_targeted'), MQTT_TOPICS.get('background_broadcast')):
                 self.command_received.emit('background', payload)
                 
         except Exception as e:
@@ -176,7 +251,8 @@ class MQTTHandler(QObject):
             data = {
                 'status': status,
                 'message': message,
-                'timestamp': time.time()
+                'timestamp': time.time(),
+                'client_id': CLIENT_ID
             }
             self.client.publish(MQTT_TOPICS['status'], json.dumps(data), MQTT_QOS)
             debug_print(f"📤 Status sent: {status} - {message}")
@@ -235,6 +311,8 @@ class ScoShowClient(QMainWindow):
         self.current_background = "unknown"
         self.mqtt_handler = None
         self.start_time = time.time()  # Track start time for uptime
+        self._opening_display = False  # Prevent multiple display openings
+        self._last_message_id = {}  # Track last processed message for each topic
         
         # Setup UI
         self.setup_ui()
@@ -535,27 +613,64 @@ class ScoShowClient(QMainWindow):
     def open_display(self, monitor_index=0, background_folder=""):
         """Open display window"""
         debug_print(f"🖥️  Opening display on monitor {monitor_index + 1}")
-        if background_folder:
-            self.background_folder = background_folder
-            
-        if not self.background_folder:
-            self.mqtt_handler.send_status("error", "No background folder specified")
+        # Debounce rapid duplicate open requests
+        now = time.time()
+        if not hasattr(self, '_last_open_time'):
+            self._last_open_time = 0
+        if now - getattr(self, '_last_open_time', 0) < 0.8:
+            debug_print("⚠️ Ignoring rapid duplicate open_display request")
+            return
+        self._last_open_time = now
+
+        # Prevent opening multiple displays at the same time
+        if hasattr(self, '_opening_display') and self._opening_display:
+            debug_print("⚠️ Display window is already being opened")
             return
             
-        # Close existing display
-        if self.display_window:
-            self.display_window.close()
-            
-        # Create new display
-        self.display_window = TournamentDisplayWindow(monitor_index)
+        self._opening_display = True
         
-        if self.display_window.load_background_folder(self.background_folder):
-            self.display_window.show()
-            self.mqtt_handler.send_status("success", f"Display opened on monitor {monitor_index + 1}")
-            debug_print(f"✅ Display window opened successfully")
-        else:
-            self.mqtt_handler.send_status("error", "Failed to load background folder")
-            debug_print(f"❌ Failed to load background folder")
+        try:
+            if background_folder:
+                self.background_folder = background_folder
+                
+            if not self.background_folder:
+                self.mqtt_handler.send_status("error", "No background folder specified")
+                return
+                
+            # If there's an existing window already open on the same monitor, reuse it
+            if self.display_window and self.display_window.isVisible() and getattr(self, 'current_monitor_index', None) == monitor_index:
+                debug_print("🔁 Reusing existing display window on the same monitor")
+                # Reload background folder if changed
+                if self.display_window.load_background_folder(self.background_folder):
+                    self.mqtt_handler.send_status("success", f"Display already open on monitor {monitor_index + 1}")
+                else:
+                    self.mqtt_handler.send_status("error", "Failed to load background folder")
+                return
+            
+            # Close existing display if different monitor or invisible
+            if self.display_window:
+                debug_print("🔄 Closing existing display window")
+                try:
+                    self.display_window.close()
+                except Exception:
+                    pass
+                self.display_window = None
+                
+            # Create new display
+            debug_print(f"🆕 Creating new display window on monitor {monitor_index}")
+            self.display_window = TournamentDisplayWindow(monitor_index)
+            self.current_monitor_index = monitor_index
+            
+            if self.display_window.load_background_folder(self.background_folder):
+                self.display_window.show()
+                self.mqtt_handler.send_status("success", f"Display opened on monitor {monitor_index + 1}")
+                debug_print(f"✅ Display window opened successfully")
+            else:
+                self.mqtt_handler.send_status("error", "Failed to load background folder")
+                debug_print(f"❌ Failed to load background folder")
+                
+        finally:
+            self._opening_display = False
             
     def close_display(self):
         """Close display window"""
@@ -680,6 +795,15 @@ def main():
     
     app = QApplication(sys.argv)
     app.setQuitOnLastWindowClosed(False)  # Keep running in system tray
+
+    # Single instance guard (process-level)
+    instance_key = f"ScoShowClient_{UNIQUE_ID}"
+    server = ensure_single_instance(instance_key)
+    if server is None:
+        debug_print("⚠️ Another ScoShow Client instance is already running. Exiting.")
+        # Optional notice to the user
+        QMessageBox.information(None, "ScoShow Client", "Another ScoShow Client instance is already running.")
+        return 0
     
     # Check if system tray is available
     if not QSystemTrayIcon.isSystemTrayAvailable():
@@ -692,7 +816,10 @@ def main():
         client = ScoShowClient()
         client.show()  # Ensure the main window is displayed
         debug_print("🎯 Starting main application loop...")
-        sys.exit(app.exec_())
+        exit_code = app.exec_()
+        # Keep server alive for the duration; then close on exit
+        server.close()
+        sys.exit(exit_code)
     except Exception as e:
         debug_print(f"💥 Application error: {e}")
         QMessageBox.critical(None, "Error", f"Application error: {e}")

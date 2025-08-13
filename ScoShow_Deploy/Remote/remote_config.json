@@ -1,11 +1,11 @@
 {
-  "monitor_index": 2,
+  "monitor_index": 0,
   "background_folder": "",
   "rank_font": "arial.ttf",
   "rank_font_size": 80,
   "rank_font_color": "white",
   "final_font_size": 120,
-  "current_background": "01",
+  "current_background": "02",
   "current_display_mode": "fullscreen",
   "current_content_type": "background",
   "round_text": "",
@@ -35,7 +35,7 @@
     "10th": "2980,939"
   },
   "final_data": {
-    "winner": "",
+    "winner": "1897852",
     "second": "",
     "third": "",
     "fourth": "",

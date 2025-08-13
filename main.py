@@ -314,69 +314,120 @@ Vị trí đã lưu: {self.stored_geometry if self.stored_geometry else 'Chưa c
             
     def add_ranking_overlay(self, draw, data):
         """Thêm text ranking cho background 01"""
-        # Lấy font settings
-        font_settings = data.get('font_settings', {})
-        font_name = font_settings.get('font_name', 'arial.ttf')
-        rank_font_size = font_settings.get('rank_font_size', 60)
-        round_font_size = font_settings.get('round_font_size', 60)
-        color = font_settings.get('color', 'white')
-        
-        # Tạo font cho ranking và round
         try:
-            rank_font = ImageFont.truetype(font_name, rank_font_size)
-        except:
-            try:
-                rank_font = ImageFont.truetype(f"C:/Windows/Fonts/{font_name}", rank_font_size)
-            except:
-                rank_font = ImageFont.load_default()
-                
-        try:
-            round_font = ImageFont.truetype(font_name, round_font_size)
-        except:
-            try:
-                round_font = ImageFont.truetype(f"C:/Windows/Fonts/{font_name}", round_font_size)
-            except:
-                round_font = ImageFont.load_default()
-        
-        # Lấy vị trí từ data
-        positions = data.get('positions', {})
-        
-        # Vẽ số round
-        if 'round' in data and data['round'] and 'round' in positions:
-            x, y = positions['round']
-            draw.text((x, y), str(data['round']), fill=color, font=round_font)
+            # Lấy font settings
+            font_settings = data.get('font_settings', {})
+            font_name = font_settings.get('font_name', 'arial.ttf')
+            rank_font_size = font_settings.get('rank_font_size', 60)
+            round_font_size = font_settings.get('round_font_size', 60)
+            color = font_settings.get('color', 'white')
             
-        # Vẽ tên players cho các rank
-        for rank in ['1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th', '10th']:
-            if rank in data and data[rank] and rank in positions and positions[rank]:
-                x, y = positions[rank]
-                draw.text((x, y), data[rank], fill=color, font=rank_font)
+            # Tạo font cho ranking và round
+            try:
+                rank_font = ImageFont.truetype(font_name, rank_font_size)
+            except:
+                try:
+                    rank_font = ImageFont.truetype(f"C:/Windows/Fonts/{font_name}", rank_font_size)
+                except:
+                    rank_font = ImageFont.load_default()
+                    
+            try:
+                round_font = ImageFont.truetype(font_name, round_font_size)
+            except:
+                try:
+                    round_font = ImageFont.truetype(f"C:/Windows/Fonts/{font_name}", round_font_size)
+                except:
+                    round_font = ImageFont.load_default()
+            
+            # Lấy vị trí từ data
+            positions = data.get('positions', {})
+            
+            # Vẽ số round
+            if 'round' in data and data['round'] and 'round' in positions:
+                try:
+                    pos = positions['round']
+                    if isinstance(pos, str) and ',' in pos:
+                        parts = pos.split(',')
+                        if len(parts) >= 2:
+                            x, y = int(parts[0].strip()), int(parts[1].strip())
+                        else:
+                            raise ValueError(f"Invalid position format: {pos}")
+                    elif isinstance(pos, (list, tuple)) and len(pos) >= 2:
+                        x, y = int(pos[0]), int(pos[1])
+                    else:
+                        raise ValueError(f"Invalid position type or format: {pos}")
+                    draw.text((x, y), str(data['round']), fill=color, font=round_font)
+                except Exception as e:
+                    print(f"❌ Error drawing round text at position {positions.get('round', 'unknown')}: {e}")
+                
+            # Vẽ tên players cho các rank
+            for rank in ['1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th', '10th']:
+                if rank in data and data[rank] and rank in positions and positions[rank]:
+                    try:
+                        pos = positions[rank]
+                        if isinstance(pos, str) and ',' in pos:
+                            parts = pos.split(',')
+                            if len(parts) >= 2:
+                                x, y = int(parts[0].strip()), int(parts[1].strip())
+                            else:
+                                raise ValueError(f"Invalid position format: {pos}")
+                        elif isinstance(pos, (list, tuple)) and len(pos) >= 2:
+                            x, y = int(pos[0]), int(pos[1])
+                        else:
+                            raise ValueError(f"Invalid position type or format: {pos}")
+                        draw.text((x, y), data[rank], fill=color, font=rank_font)
+                    except Exception as e:
+                        print(f"❌ Error drawing rank {rank} at position {positions.get(rank, 'unknown')}: {e}")
+                        
+        except Exception as e:
+            print(f"❌ Error in add_ranking_overlay: {e}")
+            import traceback
+            traceback.print_exc()
                 
     def add_final_overlay(self, draw, data):
         """Thêm text kết quả cuối cho background 02"""
-        # Lấy font settings
-        font_settings = data.get('font_settings', {})
-        font_name = font_settings.get('font_name', 'arial.ttf')
-        font_size = font_settings.get('font_size', 60)
-        color = font_settings.get('color', 'white')
-        
-        # Tạo font
         try:
-            font = ImageFont.truetype(font_name, font_size)
-        except:
+            # Lấy font settings
+            font_settings = data.get('font_settings', {})
+            font_name = font_settings.get('font_name', 'arial.ttf')
+            font_size = font_settings.get('font_size', 60)
+            color = font_settings.get('color', 'white')
+            
+            # Tạo font
             try:
-                font = ImageFont.truetype(f"C:/Windows/Fonts/{font_name}", font_size)
+                font = ImageFont.truetype(font_name, font_size)
             except:
-                font = ImageFont.load_default()
-        
-        # Lấy vị trí từ data
-        positions = data.get('positions', {})
-        
-        # Vẽ kết quả cuối
-        for key in ['winner', 'second', 'third', 'fourth', 'fifth']:
-            if key in data and data[key] and key in positions and positions[key]:
-                x, y = positions[key]
-                draw.text((x, y), data[key], fill=color, font=font)
+                try:
+                    font = ImageFont.truetype(f"C:/Windows/Fonts/{font_name}", font_size)
+                except:
+                    font = ImageFont.load_default()
+            
+            # Lấy vị trí từ data
+            positions = data.get('positions', {})
+            
+            # Vẽ kết quả cuối
+            for key in ['winner', 'second', 'third', 'fourth', 'fifth']:
+                if key in data and data[key] and key in positions and positions[key]:
+                    try:
+                        pos = positions[key]
+                        if isinstance(pos, str) and ',' in pos:
+                            parts = pos.split(',')
+                            if len(parts) >= 2:
+                                x, y = int(parts[0].strip()), int(parts[1].strip())
+                            else:
+                                raise ValueError(f"Invalid position format: {pos}")
+                        elif isinstance(pos, (list, tuple)) and len(pos) >= 2:
+                            x, y = int(pos[0]), int(pos[1])
+                        else:
+                            raise ValueError(f"Invalid position type or format: {pos}")
+                        draw.text((x, y), data[key], fill=color, font=font)
+                    except Exception as e:
+                        print(f"❌ Error drawing final result {key} at position {positions.get(key, 'unknown')}: {e}")
+                        
+        except Exception as e:
+            print(f"❌ Error in add_final_overlay: {e}")
+            import traceback
+            traceback.print_exc()
 
 class TournamentControlPanel(QMainWindow):
     """Panel điều khiển tournament trên màn hình chính với PyQt"""
