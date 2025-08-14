@@ -18,6 +18,15 @@ debug.log
 *.manifest
 *.spec
 
+# Archive folder (cleaned up files)
+archive/
+
+# Session files
+mqtt_session.json
+
+# Virtual environment
+venv/
+
 # Installer logs
 debug.log
 

@@ -829,7 +829,7 @@ class ScoShowRemoteControlSuper(QMainWindow):
         self.target_client_combo = QComboBox()
         self.target_client_combo.addItem("📢 All Clients (Broadcast)")
         self.target_client_combo.addItem("🖥️ This Computer Only")
-        self.target_client_combo.setCurrentIndex(1)  # Default to "This Computer Only"
+        self.target_client_combo.setCurrentIndex(0)  # Default to "All Clients (Broadcast)"
         self.target_client_combo.setToolTip("Select which client(s) to send commands to")
         status_layout.addWidget(self.target_client_combo)
         

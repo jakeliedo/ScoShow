@@ -23,6 +23,21 @@ pyinstaller --onefile --windowed --name="ScoShow_Client_Debug" ^
     --specpath=build ^
     scoshow_client_debug.py
 
+REM Also build console version for debugging
+echo.
+echo 🔧 Building ScoShow Client (Console Debug Version)...
+echo ================================================
+pyinstaller --onefile --console --name="ScoShow_Client_Console" ^
+    --hidden-import=PIL ^
+    --hidden-import=PIL.Image ^
+    --hidden-import=PIL.ImageTk ^
+    --hidden-import=paho.mqtt.client ^
+    --hidden-import=screeninfo ^
+    --distpath=dist ^
+    --workpath=build ^
+    --specpath=build ^
+    scoshow_client_debug.py
+
 if %ERRORLEVEL% EQU 0 (
     echo ✅ ScoShow Client built successfully!
 ) else (

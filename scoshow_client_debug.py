@@ -29,13 +29,55 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Try to allocate console for debug output when running as executable
+def allocate_console():
+    """Allocate console for debug output when running as executable"""
+    try:
+        if sys.platform == "win32" and hasattr(sys, '_MEIPASS'):
+            import ctypes
+            from ctypes import wintypes
+            
+            # Check if already have console
+            if not hasattr(allocate_console, '_console_allocated'):
+                # Allocate console
+                ctypes.windll.kernel32.AllocConsole()
+                
+                # Redirect stdout and stderr to console
+                import io
+                sys.stdout = io.TextIOWrapper(
+                    io.FileIO(ctypes.windll.kernel32.GetStdHandle(-11), 'w', closefd=False),
+                    encoding='utf-8'
+                )
+                sys.stderr = io.TextIOWrapper(
+                    io.FileIO(ctypes.windll.kernel32.GetStdHandle(-12), 'w', closefd=False),
+                    encoding='utf-8'
+                )
+                
+                allocate_console._console_allocated = True
+                print("🖥️  Debug Console Allocated")
+                return True
+    except Exception as e:
+        pass
+    return False
+
 def debug_print(message):
-    """Enhanced debug print with timestamp"""
+    """Enhanced debug print with timestamp and console allocation"""
+    # Try to allocate console if we don't have one
+    if hasattr(sys, '_MEIPASS') and not hasattr(debug_print, '_tried_console'):
+        allocate_console()
+        debug_print._tried_console = True
+    
     timestamp = datetime.now().strftime("%H:%M:%S")
-    print(f"[{timestamp}] {message}")
+    formatted_msg = f"[{timestamp}] {message}"
+    
+    try:
+        print(formatted_msg)
+        if sys.stdout:
+            sys.stdout.flush()
+    except:
+        pass
+    
     logger.info(message)
-    if sys.stdout:  # Check if stdout exists before flushing
-        sys.stdout.flush()  # Force immediate output
 
 # --- Single instance guard helpers ---
 def ensure_single_instance(instance_key: str):
@@ -306,7 +348,49 @@ class ScoShowClient(QMainWindow):
         
         # Initialize variables
         self.display_window = None
-        self.background_folder = ""
+        
+        # Auto-detect background folder
+        debug_print("📂 Auto-detecting background folder...")
+        if hasattr(sys, '_MEIPASS'):
+            # Running as PyInstaller executable
+            exe_dir = os.path.dirname(sys.executable)
+            debug_print(f"🔧 Running as executable from: {exe_dir}")
+        else:
+            # Running as Python script
+            exe_dir = os.path.dirname(os.path.abspath(__file__))
+            debug_print(f"🔧 Running as script from: {exe_dir}")
+        
+        default_bg_folder = os.path.join(exe_dir, "background")
+        debug_print(f"📁 Looking for background folder at: {default_bg_folder}")
+        
+        if os.path.exists(default_bg_folder):
+            # Check if it has required files
+            required_files = ["00", "01", "02"]
+            valid_extensions = [".jpg", ".png", ".jpeg"]
+            found_files = []
+            
+            for req_file in required_files:
+                for ext in valid_extensions:
+                    full_path = os.path.join(default_bg_folder, req_file + ext)
+                    if os.path.exists(full_path):
+                        found_files.append(req_file + ext)
+                        break
+            
+            debug_print(f"📋 Found background files: {found_files}")
+            
+            if len(found_files) >= 3:
+                self.background_folder = default_bg_folder
+                debug_print(f"✅ Background folder auto-detected: {self.background_folder}")
+            else:
+                self.background_folder = ""
+                debug_print(f"❌ Background folder incomplete (need 00, 01, 02 files)")
+        else:
+            self.background_folder = ""
+            debug_print(f"❌ Background folder not found at: {default_bg_folder}")
+        
+        if not self.background_folder:
+            debug_print("💡 You can manually select background folder later")
+        
         self.current_mode = None
         self.current_background = "unknown"
         self.mqtt_handler = None

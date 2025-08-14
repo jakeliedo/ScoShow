@@ -141,7 +141,10 @@ class ScoShowClient(QMainWindow):
         
         # Initialize variables
         self.display_window = None
-        self.background_folder = ""
+        # Set default background folder to 'background' folder in same directory
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        default_bg_folder = os.path.join(script_dir, "background")
+        self.background_folder = default_bg_folder if os.path.exists(default_bg_folder) else ""
         self.current_mode = None
         self.mqtt_handler = None
         
