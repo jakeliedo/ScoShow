@@ -703,16 +703,16 @@ class ScoShowRemoteControlSuper(QMainWindow):
         
         # Setup default positions (from enhanced version)
         self.default_rank_positions = {
-            '1st': "2980,125", '2nd': "2980,220", '3rd': "2980,318", 
-            '4th': "2980,402", '5th': "2980,495", '6th': "2980,578", 
-            '7th': "2980,672", '8th': "2980,762", '9th': "2980,850", 
-            '10th': "2980,939"
+            '1st': "3140,180", '2nd': "3140,269", '3rd': "3140,357", 
+            '4th': "3140,446", '5th': "3140,534", '6th': "3140,623", 
+            '7th': "3140,711", '8th': "3140,800", '9th': "3140,888", 
+            '10th': "3140,976"
         }
         self.default_final_positions = {
-            'winner': "3000,80", 'second': "3000,280", 'third': "3000,480", 
-            'fourth': "3000,680", 'fifth': "3000,880"
+            'winner': "3300,150", 'second': "3300,340", 'third': "3300,545", 
+            'fourth': "3300,740", 'fifth': "3300,930"
         }
-        self.default_round_position = "1286,935"
+        self.default_round_position = "1320,975"
         
         # Detect monitors
         self.detect_monitors()
@@ -1059,6 +1059,7 @@ class ScoShowRemoteControlSuper(QMainWindow):
             
             edit = QLineEdit()
             edit.setPlaceholderText(f"Enter {pos} place name")
+            edit.setAlignment(Qt.AlignCenter)  # Căn lề trung tâm cho membership numbers
             self.rank_edits[pos] = edit
             ranking_layout.addWidget(edit, row, col + 1)
             
@@ -1160,6 +1161,7 @@ class ScoShowRemoteControlSuper(QMainWindow):
             
             edit = QLineEdit()
             edit.setPlaceholderText(f"Enter {label.split()[1]} name")
+            edit.setAlignment(Qt.AlignCenter)  # Căn lề trung tâm cho membership numbers
             self.final_edits[key] = edit
             final_layout.addWidget(edit, i, 1)
             

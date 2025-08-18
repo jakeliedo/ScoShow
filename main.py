@@ -356,7 +356,7 @@ Vị trí đã lưu: {self.stored_geometry if self.stored_geometry else 'Chưa c
                         x, y = int(pos[0]), int(pos[1])
                     else:
                         raise ValueError(f"Invalid position type or format: {pos}")
-                    draw.text((x, y), str(data['round']), fill=color, font=round_font)
+                    draw.text((x, y), str(data['round']), fill=color, font=round_font, anchor='mm')
                 except Exception as e:
                     print(f"❌ Error drawing round text at position {positions.get('round', 'unknown')}: {e}")
                 
@@ -375,7 +375,7 @@ Vị trí đã lưu: {self.stored_geometry if self.stored_geometry else 'Chưa c
                             x, y = int(pos[0]), int(pos[1])
                         else:
                             raise ValueError(f"Invalid position type or format: {pos}")
-                        draw.text((x, y), data[rank], fill=color, font=rank_font)
+                        draw.text((x, y), data[rank], fill=color, font=rank_font, anchor='mm')
                     except Exception as e:
                         print(f"❌ Error drawing rank {rank} at position {positions.get(rank, 'unknown')}: {e}")
                         
@@ -420,7 +420,7 @@ Vị trí đã lưu: {self.stored_geometry if self.stored_geometry else 'Chưa c
                             x, y = int(pos[0]), int(pos[1])
                         else:
                             raise ValueError(f"Invalid position type or format: {pos}")
-                        draw.text((x, y), data[key], fill=color, font=font)
+                        draw.text((x, y), data[key], fill=color, font=font, anchor='mm')
                     except Exception as e:
                         print(f"❌ Error drawing final result {key} at position {positions.get(key, 'unknown')}: {e}")
                         
@@ -1010,6 +1010,7 @@ class TournamentControlPanel(QMainWindow):
             self.final_edits[key].setMinimumWidth(80)
             self.final_edits[key].setMaximumWidth(160)
             self.final_edits[key].setFont(QFont("Arial", 12))
+            self.final_edits[key].setAlignment(Qt.AlignCenter)  # Căn lề trung tâm cho membership numbers
             self.final_edits[key].setStyleSheet("""
                 QLineEdit {
                     border: 1px solid #CCC;
@@ -1031,6 +1032,7 @@ class TournamentControlPanel(QMainWindow):
             self.final_pos_edits[key].setMaximumWidth(100)
             self.final_pos_edits[key].setMaximumHeight(28)
             self.final_pos_edits[key].setFont(QFont("Arial", 9))
+            self.final_pos_edits[key].setAlignment(Qt.AlignCenter)  # Căn lề trung tâm cho coordinates
             self.final_pos_edits[key].setStyleSheet("""
                 QLineEdit {
                     border: 1px solid #CCC;
